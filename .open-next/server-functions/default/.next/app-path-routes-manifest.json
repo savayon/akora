@@ -1,0 +1,23 @@
+{
+  "/_global-error/page": "/_global-error",
+  "/_not-found/page": "/_not-found",
+  "/admin/page": "/admin",
+  "/api/notifications/route": "/api/notifications",
+  "/auth/callback/route": "/auth/callback",
+  "/board/debate/[id]/page": "/board/debate/[id]",
+  "/board/debate/create/page": "/board/debate/create",
+  "/board/debate/page": "/board/debate",
+  "/board/discuss/[id]/page": "/board/discuss/[id]",
+  "/board/discuss/page": "/board/discuss",
+  "/board/free/[id]/page": "/board/free/[id]",
+  "/board/free/page": "/board/free",
+  "/board/write/page": "/board/write",
+  "/debate-request/[id]/page": "/debate-request/[id]",
+  "/debate/live/[id]/page": "/debate/live/[id]",
+  "/debate/live/page": "/debate/live",
+  "/favicon.ico/route": "/favicon.ico",
+  "/mypage/page": "/mypage",
+  "/onboarding/page": "/onboarding",
+  "/page": "/",
+  "/search/page": "/search"
+}

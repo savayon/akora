@@ -1,0 +1,23 @@
+{
+  "/_global-error/page": "app/_global-error/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/admin/page": "app/admin/page.js",
+  "/api/notifications/route": "app/api/notifications/route.js",
+  "/auth/callback/route": "app/auth/callback/route.js",
+  "/board/debate/[id]/page": "app/board/debate/[id]/page.js",
+  "/board/debate/create/page": "app/board/debate/create/page.js",
+  "/board/debate/page": "app/board/debate/page.js",
+  "/board/discuss/[id]/page": "app/board/discuss/[id]/page.js",
+  "/board/discuss/page": "app/board/discuss/page.js",
+  "/board/free/[id]/page": "app/board/free/[id]/page.js",
+  "/board/free/page": "app/board/free/page.js",
+  "/board/write/page": "app/board/write/page.js",
+  "/debate-request/[id]/page": "app/debate-request/[id]/page.js",
+  "/debate/live/[id]/page": "app/debate/live/[id]/page.js",
+  "/debate/live/page": "app/debate/live/page.js",
+  "/favicon.ico/route": "app/favicon.ico/route.js",
+  "/mypage/page": "app/mypage/page.js",
+  "/onboarding/page": "app/onboarding/page.js",
+  "/page": "app/page.js",
+  "/search/page": "app/search/page.js"
+}
