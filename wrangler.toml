@@ -1,4 +1,4 @@
-name = "akora-project"
+name = "akora"
 main = ".open-next/worker.js"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
