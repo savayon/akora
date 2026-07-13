@@ -1,0 +1,11 @@
+name = "akora-project"
+main = ".open-next/worker.js"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
+
+# [vars]
+# NEXT_PUBLIC_SUPABASE_URL = "your_supabase_url"
+# NEXT_PUBLIC_SUPABASE_ANON_KEY = "your_supabase_anon_key"
+
+[build]
+command = "npm run build:worker"

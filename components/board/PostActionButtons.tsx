@@ -1,0 +1,46 @@
+"use client";
+
+import { useState } from "react";
+
+export function PostActionButtons({ initialLikes }: { initialLikes: number }) {
+  const [likes, setLikes] = useState(initialLikes);
+  const [isLiked, setIsLiked] = useState(false);
+
+  const handleToggleLike = () => {
+    if (isLiked) {
+      setLikes(prev => prev - 1);
+      setIsLiked(false);
+    } else {
+      setLikes(prev => prev + 1);
+      setIsLiked(true);
+    }
+  };
+
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      alert('공유 링크가 클립보드에 복사되었습니다.');
+    } catch (err) {
+      alert('링크 복사에 실패했습니다.');
+    }
+  };
+
+  return (
+    <div className="p-6 border-t border-slate-50 bg-slate-50 flex flex-col sm:flex-row justify-center items-center gap-3">
+      <button 
+        onClick={handleToggleLike}
+        className={`flex items-center gap-2 px-6 py-2.5 rounded-full bg-white border font-bold transition-colors shadow-sm cursor-pointer ${isLiked ? 'text-blue-600 border-blue-200 bg-blue-50' : 'text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-blue-600'}`}
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.514" /></svg>
+        추천 {likes}
+      </button>
+      <button 
+        onClick={handleShare} 
+        className="flex items-center gap-2 px-6 py-2.5 rounded-full bg-white border border-slate-200 text-slate-700 font-bold hover:bg-slate-100 hover:text-blue-500 transition-colors shadow-sm cursor-pointer"
+      >
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" /></svg>
+        공유하기
+      </button>
+    </div>
+  );
+}

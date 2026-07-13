@@ -1,0 +1,10 @@
+export { SupabaseUserRepository } from './UserRepository';
+export { SupabasePostRepository } from './PostRepository';
+export { SupabaseCommentRepository } from './CommentRepository';
+export { SupabaseDiscussionRepository } from './DiscussionRepository';
+export { SupabaseProposalRepository } from './ProposalRepository';
+export { SupabaseDebateRepository } from './DebateRepository';
+export { SupabaseTurnRepository } from './TurnRepository';
+export { SupabaseNotificationRepository } from './NotificationRepository';
+export { SupabaseReportRepository } from './ReportRepository';
+export { SupabaseSearchRepository } from './SearchRepository';
