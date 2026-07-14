@@ -14,7 +14,7 @@ import { DebateCommentSection } from '@/components/board/DebateCommentSection';
 export default function DiscussionDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  const { currentUser, openReportModal } = useAppStore();
+  const { currentUser, openReportModal, setIsLoginModalOpen } = useAppStore();
   const [topic, setTopic] = useState<DiscussionTopic | null>(null);
   const [comments, setComments] = useState<DiscussionComment[]>([]);
   const [userStance, setUserStance] = useState<'A' | 'B' | null>(null);
@@ -49,6 +49,11 @@ export default function DiscussionDetailPage({ params }: { params: Promise<{ id:
   const commentsB = visibleComments.filter(c => c.stance === 'B');
 
   const handleVote = async (selectedStance: 'A' | 'B') => {
+    if (!currentUser.id) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+
     if (userStance === selectedStance) return;
     
     if (userStance !== null) {

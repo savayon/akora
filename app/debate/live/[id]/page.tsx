@@ -15,7 +15,7 @@ import { useEffect } from 'react';
 import { SupabaseDebateRepository } from '@/repositories/supabase/DebateRepository';
 
 export default function DebateRoomPage() {
-  const { openReportModal } = useAppStore();
+  const { openReportModal, currentUser, setIsLoginModalOpen } = useAppStore();
   const params = useParams();
   const debateId = params.id as string;
   const {
@@ -60,6 +60,13 @@ export default function DebateRoomPage() {
       SupabaseDebateRepository.markAsTimeoutLoss(debateId, currentTurnOwner).catch(console.error);
     }
   }, [isExpired, debateMeta?.status, debateId, currentTurnOwner]);
+
+  // 로그인 상태 체크하여 비회원일 경우 로그인 팝업 띄우기
+  useEffect(() => {
+    if (!isLoading && debateMeta && !currentUser.id) {
+      setIsLoginModalOpen(true);
+    }
+  }, [isLoading, debateMeta, currentUser.id, setIsLoginModalOpen]);
 
   if (isLoading || !debateMeta) {
     return <div className="min-h-screen flex items-center justify-center bg-white text-slate-500 font-medium">토론 데이터를 불러오는 중입니다...</div>;

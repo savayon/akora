@@ -1,5 +1,8 @@
+"use client";
+
 import React from 'react';
 import { UserBadge, UserAvatar } from './UserBadge';
+import { useAppStore } from '@/store/useAppStore';
 
 export interface DebateData {
   id: number;
@@ -21,6 +24,10 @@ export interface DebateData {
 import Link from 'next/link';
 
 export const DebateCard = ({ debate, layout = 'carousel', className = '' }: { debate: DebateData, layout?: 'carousel' | 'grid' | 'list', className?: string }) => {
+  const { currentUser } = useAppStore();
+  const isParticipant = currentUser?.id && (currentUser.id === debate.uuidA || currentUser.id === debate.uuidB);
+  const actionText = isParticipant ? "입장 >" : "관전하기 >";
+
   const baseClasses = "bg-white border border-slate-200 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer block group/card";
   const carouselClasses = "snap-start shrink-0 w-[300px] sm:w-[340px] md:w-[380px] p-4 flex flex-col";
   const gridClasses = "w-full h-full p-4 flex flex-col";
@@ -45,7 +52,7 @@ export const DebateCard = ({ debate, layout = 'carousel', className = '' }: { de
           <div className="flex-1 flex justify-end items-center gap-4">
             <span className="flex items-center gap-1 font-bold text-sm whitespace-nowrap"><span className="text-red-500 text-base">🔥</span> {debate.hearts}명 관심</span>
             <span className="bg-slate-200 px-3 py-1.5 rounded text-slate-700 font-bold text-sm whitespace-nowrap hidden md:inline">💬 {debate.turns}턴째 진행중</span>
-            <span className="bg-purple-50 text-purple-600 border border-purple-100 px-3 py-1.5 rounded-lg font-bold text-sm whitespace-nowrap hidden md:inline ml-2 transition-colors group-hover/card:bg-purple-100 group-hover/card:text-purple-700">관전하기 &gt;</span>
+            <span className="bg-purple-50 text-purple-600 border border-purple-100 px-3 py-1.5 rounded-lg font-bold text-sm whitespace-nowrap hidden md:inline ml-2 transition-colors group-hover/card:bg-purple-100 group-hover/card:text-purple-700">{actionText}</span>
           </div>
         </div>
 
@@ -120,7 +127,7 @@ export const DebateCard = ({ debate, layout = 'carousel', className = '' }: { de
         <span className="flex items-center gap-1"><span className="text-red-500 text-sm">🔥</span> {debate.hearts}명 관심</span>
         <span className="bg-slate-200 px-2 py-1 rounded text-slate-700">💬 {debate.turns}턴째 진행중</span>
       </div>
-      <span className="text-purple-600 font-black group-hover/card:text-purple-800 transition-colors">관전하기 &gt;</span>
+      <span className="text-purple-600 font-black group-hover/card:text-purple-800 transition-colors">{actionText}</span>
     </div>
   </Link>
   );
