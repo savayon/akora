@@ -21,6 +21,7 @@ export default function Header() {
   const notiRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const router = useRouter();
 
   // 안 읽은 알림 개수 계산
@@ -106,8 +107,17 @@ export default function Header() {
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center gap-8">
+        <div className="flex justify-between items-center h-16 relative">
+          <div className="flex items-center gap-4 md:gap-8">
+            {/* 햄버거 메뉴 버튼 (모바일 전용) */}
+            <button 
+              className="md:hidden p-2 -ml-2 text-slate-600 hover:text-slate-900"
+              onClick={() => setIsMobileMenuOpen(true)}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </button>
             <Link href="/" className="flex items-center group">
               <img src="/logo.png" alt="아고라 로고" className="h-10 md:h-14 w-auto object-contain transition-transform group-hover:scale-105 mix-blend-multiply" />
             </Link>
@@ -241,6 +251,55 @@ export default function Header() {
         isOpen={isLoginModalOpen} 
         onClose={() => setIsLoginModalOpen(false)} 
       />
+
+      {/* 모바일 슬라이드 메뉴 */}
+      {isMobileMenuOpen && (
+        <div className="md:hidden fixed inset-0 z-[100] flex">
+          {/* 배경 오버레이 */}
+          <div 
+            className="fixed inset-0 bg-slate-900/50 transition-opacity" 
+            onClick={() => setIsMobileMenuOpen(false)}
+          ></div>
+          {/* 슬라이드 패널 */}
+          <div className="relative flex flex-col w-64 max-w-sm h-full bg-white shadow-xl animate-in slide-in-from-left duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100">
+              <span className="font-black text-lg text-slate-900">메뉴</span>
+              <button 
+                onClick={() => setIsMobileMenuOpen(false)}
+                className="p-2 -mr-2 text-slate-400 hover:text-slate-600"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <nav className="flex flex-col p-4 gap-2 font-bold text-slate-700">
+              <Link href="/board/debate" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 rounded-lg ${pathname.includes('/board/debate') ? 'text-purple-600 bg-purple-50' : 'hover:bg-slate-50'}`}>토론게시판</Link>
+              <Link href="/debate/live" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 rounded-lg ${pathname.includes('/debate/live') ? 'text-purple-600 bg-purple-50' : 'hover:bg-slate-50'}`}>1:1 토론</Link>
+              <Link href="/board/free" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 rounded-lg ${pathname.includes('/board/free') ? 'text-purple-600 bg-purple-50' : 'hover:bg-slate-50'}`}>자유게시판</Link>
+              <Link href="/board/discuss" onClick={() => setIsMobileMenuOpen(false)} className={`p-3 rounded-lg ${pathname.includes('/board/discuss') ? 'text-purple-600 bg-purple-50' : 'hover:bg-slate-50'}`}>토의게시판</Link>
+            </nav>
+            {isLoggedIn ? (
+              <div className="mt-auto border-t border-slate-100 p-4 flex flex-col gap-2">
+                <Link href="/mypage" onClick={() => setIsMobileMenuOpen(false)} className="p-3 font-bold text-slate-700 hover:bg-slate-50 rounded-lg">마이페이지</Link>
+                <button onClick={handleLogout} className="p-3 text-left font-bold text-red-500 hover:bg-red-50 rounded-lg">로그아웃</button>
+              </div>
+            ) : (
+              <div className="mt-auto border-t border-slate-100 p-4">
+                <button 
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    setIsLoginModalOpen(true);
+                  }}
+                  className="w-full p-3 font-bold text-white bg-slate-900 rounded-lg hover:bg-slate-800 transition-colors"
+                >
+                  로그인 / 회원가입
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </header>
   );
 }

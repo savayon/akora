@@ -27,7 +27,7 @@ export default function Footer() {
         <div className="space-y-3">
           <h4 className="font-bold text-slate-700 text-sm">Contact Us</h4>
           <ul className="space-y-1.5 text-xs">
-            <li>메일: <a href="mailto:akoradebate@google.com" className="hover:text-slate-900 transition-colors">akoradebate@google.com</a></li>
+            <li>메일: <a href="mailto:akoradebate@gmail.com" className="hover:text-slate-900 transition-colors">akoradebate@gmail.com</a></li>
             <li className="pt-1 flex items-center gap-1.5">
               인스타: <a href="https://instagram.com/akora.official" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 transition-colors font-semibold flex items-center gap-1">@akora.official <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg></a>
             </li>
