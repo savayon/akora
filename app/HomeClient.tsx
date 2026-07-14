@@ -99,12 +99,12 @@ export function HomeClient({ debates, topics, freePosts, discussPosts }: Props) 
 
   return (
     <>
-      <section className={`bg-white border-b border-gray-200 transition-all duration-300 ease-in-out flex flex-col items-center justify-center text-center ${isScrolled ? 'py-5' : 'pt-20 pb-12 px-4'}`}>
-        <h1 className={`font-black text-slate-900 tracking-tight transition-all ease-in-out animate-fade-in-up ${isScrolled ? 'text-2xl md:text-3xl' : 'text-4xl md:text-5xl'}`}>
+      <section className="bg-white border-b border-gray-200 flex flex-col items-center justify-center text-center pt-20 pb-12 px-4">
+        <h1 className="font-black text-slate-900 tracking-tight text-4xl md:text-5xl animate-fade-in-up">
           <span className="text-yellow-500">아고라</span>, 지성인의 놀이터
         </h1>
         
-        <div className={`overflow-hidden transition-all ease-in-out w-full px-4 ${isScrolled ? 'max-h-0 opacity-0' : 'max-h-60 opacity-100 mt-5'}`}>
+        <div className="w-full px-4 mt-5">
           <p className="text-xl md:text-2xl font-bold text-slate-700 mb-4 animate-fade-in-up-delay">
             논리와 존중이 함께하는 아고라에 오신 것을 환영합니다.<br className="hidden md:block"/> 나의 논리를 펼치세요. 사람들을 설득하세요.
           </p>

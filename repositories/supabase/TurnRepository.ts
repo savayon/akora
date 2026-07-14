@@ -42,24 +42,37 @@ export const SupabaseTurnRepository: ITurnRepository = {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('로그인이 필요합니다.');
 
-    const { data, error } = await supabase
+    const { data: rpcData, error: rpcError } = await supabase.rpc('add_turn_safely', {
+      p_debate_id: debateId,
+      p_author_id: user.id,
+      p_author_role: turnData.authorRole,
+      p_turn_num: turnData.turnNum,
+      p_content: turnData.content,
+      p_quoted_turn_id: turnData.quotedTurnId || null,
+      p_quoted_excerpt: turnData.quotedExcerpt || null
+    });
+
+    if (rpcError) {
+      console.error(rpcError);
+      throw new Error(rpcError.message.includes('Time limit exceeded') ? '답변 기한이 만료되어 발언을 등록할 수 없습니다.' : '발언 등록 실패: ' + rpcError.message);
+    }
+
+    // RPC가 반환한 새로 생성된 턴 데이터
+    const newTurn = rpcData as any;
+
+    // 조인된 작성자 정보를 가져오기 위해 다시 한 번 조회합니다.
+    const { data: fullData, error: selectError } = await supabase
       .from('turns')
-      .insert({
-        debate_id: debateId,
-        author_id: user.id,
-        author_role: turnData.authorRole,
-        turn_num: turnData.turnNum,
-        content: turnData.content,
-        quoted_turn_id: turnData.quotedTurnId || null,
-        quoted_excerpt: turnData.quotedExcerpt || null,
-      })
       .select('*, author:users(nickname, avatar_url)')
+      .eq('id', newTurn.id)
       .single();
 
-    if (error || !data) {
-      console.error(error);
-      throw new Error('발언 등록 실패');
+    if (selectError || !fullData) {
+      console.error(selectError);
+      throw new Error('발언 등록은 성공했으나 데이터를 불러오는 데 실패했습니다.');
     }
+
+    const data = fullData;
 
     return {
       id: data.id,

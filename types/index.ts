@@ -83,6 +83,8 @@ export interface Debate {
   originUrl: string;
   round: number;
   status: DebateStatus;
+  endedReason?: 'timeout' | 'normal' | 'abandoned';
+  timeoutLoserRole?: 'proposer' | 'responder';
   createdAt?: string;
 }
 

@@ -27,16 +27,16 @@ export default function Footer() {
         <div className="space-y-3">
           <h4 className="font-bold text-slate-700 text-sm">Contact Us</h4>
           <ul className="space-y-1.5 text-xs">
-            <li><a href="mailto:support@akora.com" className="hover:text-slate-900 transition-colors">고객센터: support@akora.com</a></li>
-            <li><a href="mailto:partnership@akora.com" className="hover:text-slate-900 transition-colors">제휴 문의: partnership@akora.com</a></li>
-            <li className="pt-1"><span className="text-slate-400">운영시간: 평일 10:00 - 18:00</span></li>
+            <li>메일: <a href="mailto:akoradebate@google.com" className="hover:text-slate-900 transition-colors">akoradebate@google.com</a></li>
+            <li className="pt-1 flex items-center gap-1.5">
+              인스타: <a href="https://instagram.com/akora.official" target="_blank" rel="noopener noreferrer" className="hover:text-slate-900 transition-colors font-semibold flex items-center gap-1">@akora.official <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5"></rect><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"></path><line x1="17.5" y1="6.5" x2="17.51" y2="6.5"></line></svg></a>
+            </li>
           </ul>
         </div>
       </div>
       
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-4 border-t border-gray-200 flex flex-col md:flex-row justify-between items-center gap-2 text-[11px] text-slate-400">
-        <p>© 2026 akora Project. All rights reserved.</p>
-        <p>운영자: 아고라팀 | 사업자등록번호: 123-45-67890 | 대표: 홍길동</p>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-8 pt-4 border-t border-gray-200 flex justify-end text-[11px] text-slate-400">
+        <p>since 2026</p>
       </div>
     </footer>
   );

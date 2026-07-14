@@ -76,6 +76,7 @@ export interface IDebateRepository {
   getVoteStats(debateId: string): Promise<{ proposer: number; responder: number }>;
   getUserVote(debateId: string, userId: string): Promise<'proposer' | 'responder' | null>;
   getDebateByProposalId(proposalId: string | number): Promise<Debate | null>;
+  markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder'): Promise<boolean>;
 }
 
 // ============================================================

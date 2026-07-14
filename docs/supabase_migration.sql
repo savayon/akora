@@ -215,6 +215,8 @@ CREATE TABLE IF NOT EXISTS public.debates (
   origin_preview text NOT NULL DEFAULT '',
   origin_url text NOT NULL DEFAULT '',
   status text DEFAULT 'in_progress' NOT NULL CHECK (status IN ('in_progress', 'voting', 'completed')),
+  ended_reason text CHECK (ended_reason IN ('timeout', 'normal', 'abandoned')),
+  timeout_loser_role text CHECK (timeout_loser_role IN ('proposer', 'responder')),
   created_at timestamptz DEFAULT now() NOT NULL
 );
 
@@ -389,6 +391,8 @@ CREATE POLICY "discussion_topics_delete" ON public.discussion_topics FOR DELETE 
 ALTER TABLE public.discussion_votes ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "discussion_votes_select" ON public.discussion_votes;
 DROP POLICY IF EXISTS "discussion_votes_insert" ON public.discussion_votes;
+DROP POLICY IF EXISTS "discussion_votes_update" ON public.discussion_votes;
+DROP POLICY IF EXISTS "discussion_votes_delete" ON public.discussion_votes;
 CREATE POLICY "discussion_votes_select" ON public.discussion_votes FOR SELECT USING (true);
 CREATE POLICY "discussion_votes_insert" ON public.discussion_votes FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "discussion_votes_update" ON public.discussion_votes FOR UPDATE USING (auth.uid() = user_id);
@@ -398,6 +402,7 @@ CREATE POLICY "discussion_votes_delete" ON public.discussion_votes FOR DELETE US
 ALTER TABLE public.discussion_comments ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "discussion_comments_select" ON public.discussion_comments;
 DROP POLICY IF EXISTS "discussion_comments_insert" ON public.discussion_comments;
+DROP POLICY IF EXISTS "discussion_comments_update" ON public.discussion_comments;
 DROP POLICY IF EXISTS "discussion_comments_delete" ON public.discussion_comments;
 CREATE POLICY "discussion_comments_select" ON public.discussion_comments FOR SELECT USING (true);
 CREATE POLICY "discussion_comments_insert" ON public.discussion_comments FOR INSERT WITH CHECK (auth.uid() = author_id);
@@ -588,3 +593,80 @@ END $$;
 -- 완료 메시지
 -- ============================================================
 DO $$ BEGIN RAISE NOTICE 'Agora Migration 완료: 모든 테이블 및 RLS 정책이 설정되었습니다.'; END $$;
+
+-- ============================================================
+-- 시간초과 강제 패배 관련 추가 스키마 및 RPC
+-- ============================================================
+
+-- 발언 등록 시 시간 초과 검증 및 자동 종료 처리를 원자적으로 수행하는 RPC
+CREATE OR REPLACE FUNCTION public.add_turn_safely(
+  p_debate_id uuid,
+  p_author_id uuid,
+  p_author_role text,
+  p_turn_num int,
+  p_content text,
+  p_quoted_turn_id uuid DEFAULT NULL,
+  p_quoted_excerpt text DEFAULT NULL
+)
+RETURNS json
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_status text;
+  v_last_turn_time timestamptz;
+  v_debate_created_at timestamptz;
+  v_time_limit interval := interval '12 hours';
+  v_new_turn_id uuid;
+  v_turn_row record;
+BEGIN
+  -- 1. 토론 상태 조회 (행 잠금을 통해 동시성 제어)
+  SELECT status, created_at
+  INTO v_status, v_debate_created_at
+  FROM public.debates
+  WHERE id = p_debate_id
+  FOR UPDATE;
+
+  IF v_status IS NULL THEN
+    RAISE EXCEPTION 'Debate not found';
+  END IF;
+
+  IF v_status != 'in_progress' THEN
+    RAISE EXCEPTION 'Debate is already ended (status: %)', v_status;
+  END IF;
+
+  -- 2. 마지막 발언 시간 조회
+  SELECT created_at
+  INTO v_last_turn_time
+  FROM public.turns
+  WHERE debate_id = p_debate_id
+  ORDER BY created_at DESC
+  LIMIT 1;
+
+  -- 마지막 발언이 없으면 토론 생성 시간 기준
+  IF v_last_turn_time IS NULL THEN
+    v_last_turn_time := v_debate_created_at;
+  END IF;
+
+  -- 3. 기한 만료 검증
+  IF now() > v_last_turn_time + v_time_limit THEN
+    -- 기한 초과: 강제 종료 처리 (timeout loss)
+    UPDATE public.debates
+    SET status = 'voting',
+        ended_reason = 'timeout',
+        timeout_loser_role = p_author_role
+    WHERE id = p_debate_id AND status = 'in_progress';
+    
+    RAISE EXCEPTION 'Time limit exceeded. Debate has been automatically ended with a timeout loss.';
+  END IF;
+
+  -- 4. 발언 등록
+  INSERT INTO public.turns (
+    debate_id, author_id, author_role, turn_num, content, quoted_turn_id, quoted_excerpt
+  ) VALUES (
+    p_debate_id, p_author_id, p_author_role, p_turn_num, p_content, p_quoted_turn_id, p_quoted_excerpt
+  ) RETURNING * INTO v_turn_row;
+
+  RETURN row_to_json(v_turn_row);
+END;
+$$;

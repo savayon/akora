@@ -176,5 +176,26 @@ export const SupabaseDebateRepository: IDebateRepository = {
     
     if (error || !data) return null;
     return { id: data.id } as Debate;
+  },
+
+  async markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder'): Promise<boolean> {
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from('debates')
+      .update({
+        status: 'voting',
+        ended_reason: 'timeout',
+        timeout_loser_role: loserRole
+      })
+      .eq('id', debateId)
+      .eq('status', 'in_progress')
+      .select('id');
+
+    if (error) {
+      console.error('markAsTimeoutLoss error:', error);
+      return false;
+    }
+
+    return data && data.length > 0;
   }
 };

@@ -11,6 +11,8 @@ import { DebateInput } from '@/components/debate/DebateInput';
 import { VotingSection } from '@/components/debate/VotingSection';
 import { useAppStore } from '@/store/useAppStore';
 import { useCountdown } from '@/hooks/useCountdown';
+import { useEffect } from 'react';
+import { SupabaseDebateRepository } from '@/repositories/supabase/DebateRepository';
 
 export default function DebateRoomPage() {
   const { openReportModal } = useAppStore();
@@ -46,9 +48,18 @@ export default function DebateRoomPage() {
     voteStats
   } = useDebateRoom(debateId);
 
-  // 턴 답변 기한 (마지막 턴이 생성된 시간 기준 + 24시간, 없으면 토론 생성 시간 기준)
+  // 턴 답변 기한 (마지막 턴이 생성된 시간 기준 + 12시간, 없으면 토론 생성 시간 기준)
   const lastTurnTime = turns.length > 0 ? turns[turns.length - 1].createdAt : debateMeta?.createdAt;
-  const { timeLeft: turnTimeLeft } = useCountdown(lastTurnTime || '', 24 * 60 * 60 * 1000);
+  const { timeLeft: turnTimeLeft, isExpired } = useCountdown(lastTurnTime || '', 12 * 60 * 60 * 1000);
+  
+  const effectiveIsDebateEnded = isDebateEnded || isExpired || debateMeta?.status === 'voting' || debateMeta?.status === 'completed';
+
+  // 12시간 경과 감지 시 Lazy Update
+  useEffect(() => {
+    if (isExpired && debateMeta?.status === 'in_progress') {
+      SupabaseDebateRepository.markAsTimeoutLoss(debateId, currentTurnOwner).catch(console.error);
+    }
+  }, [isExpired, debateMeta?.status, debateId, currentTurnOwner]);
 
   if (isLoading || !debateMeta) {
     return <div className="min-h-screen flex items-center justify-center bg-white text-slate-500 font-medium">토론 데이터를 불러오는 중입니다...</div>;
@@ -212,7 +223,7 @@ export default function DebateRoomPage() {
         
         <div className={isFullView ? 'lg:col-span-2 flex flex-col' : ''}>
         
-        {isDebateEnded ? (
+        {effectiveIsDebateEnded ? (
           <div className="space-y-12 animate-in fade-in slide-in-from-top-4 duration-500">
             
             <section className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
@@ -221,6 +232,12 @@ export default function DebateRoomPage() {
                 <h2 className="text-2xl font-black text-slate-900">양측의 3줄 요약</h2>
                 <p className="text-slate-500 text-sm mt-2">긴 글을 읽기 전, 양측의 핵심 주장을 먼저 파악하세요.</p>
               </div>
+
+              {(isExpired || debateMeta?.endedReason === 'timeout') && (
+                <div className="mb-8 bg-red-50 border-2 border-red-200 text-red-700 px-6 py-4 rounded-xl text-center font-bold animate-in fade-in zoom-in duration-300">
+                  ⏳ 답변 기한이 만료되어 <span className="font-black text-red-800 text-lg">{(debateMeta?.timeoutLoserRole || currentTurnOwner) === 'proposer' ? debateMeta.proposerName : debateMeta.responderName}</span>님의 시간패로 토론이 종료되었습니다.
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <SummaryCard summary={{
@@ -285,7 +302,7 @@ export default function DebateRoomPage() {
           <div className="space-y-8">
             {turns.map(turn => renderTurnCard(turn))}
 
-            {!isDebateEnded && (
+            {!effectiveIsDebateEnded && (
               <div className="flex items-center justify-center py-6 animate-pulse">
                 <div className="bg-white shadow-sm rounded-full px-5 py-2.5 flex items-center gap-3 border border-slate-200">
                   <span className="text-xl">⏳</span>
@@ -347,7 +364,7 @@ export default function DebateRoomPage() {
       {/* 입력 영역 */}
       <DebateInput
         role={role}
-        isDebateEnded={isDebateEnded}
+        isDebateEnded={effectiveIsDebateEnded}
         currentTurnOwner={currentTurnOwner}
         replyTarget={replyTarget}
         inputValue={inputValue}
