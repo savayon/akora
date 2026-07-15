@@ -68,6 +68,9 @@ export default function DiscussionDetailPage({ params }: { params: Promise<{ id:
       
       // 낙관적 업데이트: 기존 댓글 즉시 UI에서 숨김
       setComments(prev => prev.filter(c => !(c.author === currentUser.name && c.stance === userStance)));
+    } else {
+      const confirmVote = window.confirm("투표하시겠습니까?");
+      if (!confirmVote) return;
     }
     
     setUserStance(selectedStance);
