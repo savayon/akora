@@ -5,6 +5,7 @@ import { ThumbUpIcon, ReplyIcon } from '@/components/icons';
 import { Comment, BoardComment } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
 import { commentRepository } from '@/repositories';
+import { ContentRenderer } from '@/components/ContentRenderer';
 
 type CommentItemProps = {
   comment: Comment | BoardComment;
@@ -14,7 +15,7 @@ type CommentItemProps = {
   role?: 'proposer' | 'responder' | 'viewer';
   onReply?: (commentId: string | number) => void;
   onProposeDebate?: (commentId: string | number, author: string, content: string) => void;
-  onSubmitReply?: (commentId: string | number, content: string, isProposal: boolean) => void;
+  onSubmitReply?: (commentId: string | number, content: string, isProposal: boolean, claim?: string) => void;
   children?: React.ReactNode;
   isDiscussBoard?: boolean;
   postAuthorId?: string;
@@ -44,15 +45,31 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   const [isReplying, setIsReplying] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isProposalMode, setIsProposalMode] = useState(false);
+  const [proposalClaimText, setProposalClaimText] = useState('');
   
   const { currentUser, openReportModal, setIsLoginModalOpen } = useAppStore();
+  
+  // 제안인 경우 보고싶어요 상태 로드
+  React.useEffect(() => {
+    const proposalId = boardComment?.proposalId;
+    if (isProposal && currentUser?.id && proposalId) {
+      import('@/repositories').then(({ proposalRepository }) => {
+        proposalRepository.getWatchStatus(proposalId, currentUser.id).then(({ isWatched, watchCount }) => {
+          setIsWatched(isWatched);
+          setWatchCount(watchCount);
+        }).catch(console.error);
+      });
+    }
+  }, [isProposal, currentUser?.id, boardComment?.proposalId]);
 
-  const handleToggleLike = () => {
+  const handleToggleLike = async () => {
     if (!currentUser.id) {
       setIsLoginModalOpen(true);
       return;
     }
     if (isProposal) return;
+    
+    // UI 낙관적 업데이트
     if (isLiked) {
       setLocalLikes(prev => prev - 1);
       setIsLiked(false);
@@ -60,19 +77,49 @@ export const CommentItem: React.FC<CommentItemProps> = ({
       setLocalLikes(prev => prev + 1);
       setIsLiked(true);
     }
+
+    try {
+      if (isDiscussBoard) {
+        const { discussionRepository } = await import('@/repositories');
+        await discussionRepository.toggleCommentLike(comment.id, currentUser.id);
+      } else {
+        await commentRepository.toggleLike(String(comment.id), currentUser.id);
+      }
+    } catch (e) {
+      console.error(e);
+      // 롤백
+      setLocalLikes(localLikes);
+      setIsLiked(isLiked);
+    }
   };
 
-  const handleToggleWatch = () => {
+  const handleToggleWatch = async () => {
     if (!currentUser.id) {
       setIsLoginModalOpen(true);
       return;
     }
+    
+    // UI 낙관적 업데이트
     if (isWatched) {
       setWatchCount(prev => Math.max(0, prev - 1));
       setIsWatched(false);
     } else {
       setWatchCount(prev => prev + 1);
       setIsWatched(true);
+    }
+
+    try {
+      if (boardComment?.proposalId) {
+        const { proposalRepository } = await import('@/repositories');
+        const result = await proposalRepository.toggleWatchProposal(boardComment.proposalId, currentUser.id);
+        setIsWatched(result.isWatched);
+        setWatchCount(result.watchCount);
+      }
+    } catch (e) {
+      console.error(e);
+      // 롤백
+      setIsWatched(!isWatched);
+      setWatchCount(isWatched ? watchCount + 1 : watchCount - 1);
     }
   };
 
@@ -82,11 +129,19 @@ export const CommentItem: React.FC<CommentItemProps> = ({
       return;
     }
     if (!replyText.trim() || !onSubmitReply) return;
+    if (isProposalMode) {
+      const claim = proposalClaimText.trim();
+      if (!claim || claim.length < 5) {
+        alert('토론 주장을 최소 5자 이상 20자 이내로 입력해주세요.');
+        return;
+      }
+    }
     if (onSubmitReply) {
-      onSubmitReply(comment.id, replyText, isProposalMode);
+      onSubmitReply(comment.id, replyText, isProposalMode, proposalClaimText.trim());
     }
     setIsReplying(false); 
     setReplyText(''); 
+    setProposalClaimText('');
     setIsProposalMode(false);
   };
 
@@ -242,14 +297,14 @@ export const CommentItem: React.FC<CommentItemProps> = ({
             )}
           </div>
         ) : (
-          <p className={`text-slate-700 ${variant === 'compact' ? 'text-xs my-2' : 'text-sm md:text-base my-3'} leading-relaxed break-words whitespace-pre-wrap`}>
+          <div className={`text-slate-700 ${variant === 'compact' ? 'text-xs my-2' : 'text-sm md:text-base my-3'} leading-relaxed`}>
             {isProposal && (
               <span className="inline-block bg-purple-100 text-purple-700 px-2 py-0.5 rounded-md font-black text-xs mr-2 mb-1">
                 토론을 제안했습니다!
               </span>
             )}
-            {comment.content}
-          </p>
+            <ContentRenderer content={comment.content} />
+          </div>
         )}
 
         <div className="flex items-center gap-4 text-xs font-bold text-slate-500 mt-2">
@@ -271,7 +326,7 @@ export const CommentItem: React.FC<CommentItemProps> = ({
           <button 
             disabled={isProposal}
             onClick={handleToggleLike}
-            className={`flex items-center gap-1.5 transition-colors ${isProposal ? 'opacity-50 cursor-not-allowed' : 'hover:text-blue-500 cursor-pointer'} ${isLiked ? 'text-blue-500' : ''}`}
+            className={`flex items-center gap-1.5 transition-colors ${isProposal ? 'opacity-50 cursor-not-allowed' : 'hover:text-red-500 cursor-pointer'} ${isLiked ? 'text-red-500' : ''}`}
           >
             <ThumbUpIcon className="w-4 h-4" /> {isProposal ? '-' : localLikes}
           </button>
@@ -299,17 +354,28 @@ export const CommentItem: React.FC<CommentItemProps> = ({
           )}
           
           {isProposal && (!boardComment?.debateStatus || boardComment.debateStatus === 'pending' || boardComment.debateStatus === 'none') && (
-            <button 
-              onClick={handleToggleWatch}
-              className={`ml-auto px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1 cursor-pointer ${isWatched ? 'bg-yellow-400 text-slate-900' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
-            >
-              🙋 보고싶어요! {watchCount > 0 && <span className="font-black">{watchCount}</span>}
-            </button>
+            <>
+              {currentUser?.id === boardComment?.targetUserId ? (
+                <Link 
+                  href={`/debate-request/${boardComment?.proposalId}`}
+                  className="ml-auto px-3 py-1.5 rounded-lg text-sm font-bold transition-colors flex items-center gap-1 cursor-pointer bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+                >
+                  수락하기
+                </Link>
+              ) : (
+                <button 
+                  onClick={handleToggleWatch}
+                  className={`ml-auto px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1 cursor-pointer ${isWatched ? 'bg-yellow-400 text-slate-900' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
+                >
+                  🙋 보고싶어요! {watchCount > 0 && <span className="font-black">{watchCount}</span>}
+                </button>
+              )}
+            </>
           )}
           
           {isProposal && boardComment?.debateStatus === 'active' && (
             <Link href={`/debate/live/${boardComment?.debateId}`} className="ml-auto bg-purple-100 hover:bg-purple-200 text-purple-800 px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1 font-bold cursor-pointer">
-              📖 관전하기
+              {currentUser?.id === comment.authorId || currentUser?.id === boardComment?.targetUserId ? '🎤 입장하기' : '📖 관전하기'}
             </Link>
           )}
 
@@ -331,8 +397,16 @@ export const CommentItem: React.FC<CommentItemProps> = ({
             {isProposalMode && (
               <div className="mb-2 text-sm text-slate-700">
                 <span className="font-bold">{currentUser.name}</span>님이 <span className="font-bold">{comment.author}</span>님에게
-                <div className="mt-1 mb-2">
-                  <span className="inline-block bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded text-xs mr-2">토론을 제안했습니다!</span>
+                <div className="mt-2 mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
+                  <span className="inline-block bg-purple-100 text-purple-800 font-bold px-2 py-1.5 rounded text-xs shrink-0 w-max">토론을 제안했습니다!</span>
+                  <input
+                    type="text"
+                    maxLength={20}
+                    value={proposalClaimText}
+                    onChange={(e) => setProposalClaimText(e.target.value)}
+                    placeholder="내 주장을 20자 이내로 적어주세요 (최소 5자)"
+                    className="flex-1 bg-white border border-purple-200 text-purple-900 text-sm rounded-md px-3 py-1.5 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 shadow-inner"
+                  />
                 </div>
               </div>
             )}

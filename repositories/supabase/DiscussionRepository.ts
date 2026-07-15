@@ -16,6 +16,19 @@ export const SupabaseDiscussionRepository: IDiscussionRepository = {
     return data.map(mapToDiscussionTopic);
   },
 
+  async getRecentTopics(limit, client?) {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('discussion_topics')
+      .select('*, users!discussion_topics_author_fkey(nickname, avatar_url)')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return data.map(mapToDiscussionTopic);
+  },
+
   async getTopic(id) {
     const supabase = createClient();
     const { data, error } = await supabase
@@ -168,8 +181,34 @@ export const SupabaseDiscussionRepository: IDiscussionRepository = {
       .update({ deleted_at: new Date().toISOString(), deleted_reason: reason })
       .eq('id', id);
     if (error) {
-      console.error(error);
       throw new Error('요청을 처리하는 중 오류가 발생했습니다.');
+    }
+  },
+
+  async toggleCommentLike(commentId: string | number, userId: string): Promise<boolean> {
+    const supabase = createClient();
+    
+    // Check if already liked
+    const { data: existing } = await supabase
+      .from('discussion_comment_likes')
+      .select('id')
+      .eq('comment_id', commentId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Remove like
+      const { error } = await supabase.from('discussion_comment_likes').delete().eq('id', existing.id);
+      if (error) throw new Error('추천 취소 실패');
+      return false;
+    } else {
+      // Add like
+      const { error } = await supabase.from('discussion_comment_likes').insert({
+        comment_id: commentId,
+        user_id: userId
+      });
+      if (error) throw new Error('추천 실패');
+      return true;
     }
   },
 };

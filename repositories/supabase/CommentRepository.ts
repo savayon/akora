@@ -28,6 +28,7 @@ function buildCommentTree(rows: any[]): BoardComment[] {
       hasDebate: row.hasDebate || false,
       debateStatus: row.debateStatus || 'none',
       debateId: row.debateId,
+      proposalId: row.proposalId,
       replies: [],
     };
     map.set(row.id, comment);
@@ -72,7 +73,8 @@ export const SupabaseCommentRepository: ICommentRepository = {
       const { data: proposalsData } = await supabase
         .from('proposals')
         .select(`
-          id, status, source_id,
+          id, status, source_id, target_id,
+          target:users!proposals_target_id_fkey(nickname),
           debates (id)
         `)
         .in('source_id', proposalCommentIds);
@@ -88,10 +90,13 @@ export const SupabaseCommentRepository: ICommentRepository = {
       let hasDebate = false;
       let debateStatus = 'none';
       let debateId;
+      let proposalId;
+      let p;
 
       if (row.reply_type === 'proposal' && proposalsMap.has(row.id)) {
-        const p = proposalsMap.get(row.id);
+        p = proposalsMap.get(row.id);
         hasDebate = true;
+        proposalId = p.id;
         if (p.status === 'accepted' && p.debates) {
           const debateObj = Array.isArray(p.debates) ? p.debates[0] : p.debates;
           if (debateObj) {
@@ -109,9 +114,14 @@ export const SupabaseCommentRepository: ICommentRepository = {
 
       return {
         ...row,
+        target_user_id: row.target_user_id || p?.target_id,
+        target_user: {
+          nickname: (Array.isArray(row.target_user) ? row.target_user[0]?.nickname : (row.target_user as any)?.nickname) || (Array.isArray(p?.target) ? p?.target[0]?.nickname : p?.target?.nickname)
+        },
         hasDebate,
         debateStatus,
         debateId,
+        proposalId,
       };
     });
 
@@ -179,6 +189,33 @@ export const SupabaseCommentRepository: ICommentRepository = {
     if (error) {
       console.error(error);
       throw new Error('요청을 처리하는 중 오류가 발생했습니다.');
+    }
+  },
+
+  async toggleLike(commentId: string, userId: string): Promise<boolean> {
+    const supabase = createClient();
+    
+    // Check if already liked
+    const { data: existing } = await supabase
+      .from('comment_likes')
+      .select('id')
+      .eq('comment_id', commentId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Remove like
+      const { error } = await supabase.from('comment_likes').delete().eq('id', existing.id);
+      if (error) throw new Error('추천 취소 실패');
+      return false;
+    } else {
+      // Add like
+      const { error } = await supabase.from('comment_likes').insert({
+        comment_id: commentId,
+        user_id: userId
+      });
+      if (error) throw new Error('추천 실패');
+      return true;
     }
   },
 };

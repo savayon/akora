@@ -6,7 +6,6 @@ import { useState, useEffect, use } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useCountdown } from '@/hooks/useCountdown';
 import { proposalRepository, debateRepository, notificationRepository } from '@/repositories';
-import { createClient } from '@/utils/supabase/client';
 import type { Proposal } from '@/types';
 
 // Mock Data
@@ -24,6 +23,7 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
   const router = useRouter();
   const resolvedParams = use(params);
   const [isRejecting, setIsRejecting] = useState(false);
+  const [responderClaim, setResponderClaim] = useState('');
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const { timeLeft: expiresIn } = useCountdown(proposal?.createdAt || '', 24 * 60 * 60 * 1000);
   const [loading, setLoading] = useState(true);
@@ -85,6 +85,9 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
         originType: proposal.sourceType,
         originPreview: proposal.excerpt,
         originUrl: proposal.sourceType === 'post' ? `/board/free/${proposal.sourceId}` : `/board/free`,
+        proposerClaim: proposal.claim,
+        responderClaim: responderClaim,
+        status: 'in_progress',
       });
 
       // 3. 알림 생성 (상대방에게 수락되었음을 알림)
@@ -98,7 +101,27 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
         });
       }
 
-      // 4. 새 토론방으로 이동
+      // 4. 보고싶어요(proposal_watches) 했던 유저들을 팔로워(debate_followers)로 마이그레이션하고 알림 발송
+      try {
+        const watcherIds = await proposalRepository.migrateWatchersToFollowers(proposal.id, String(createdDebate.id));
+        
+        for (const watcherId of watcherIds) {
+          // 본인이 아니라면 알림
+          if (watcherId !== proposal.proposerId && watcherId !== proposal.targetId) {
+            await notificationRepository.createNotification(watcherId, {
+              type: 'proposal_received',
+              icon: '👀',
+              message: `보고싶어했던 토론이 성사되었습니다!`,
+              subtext: `주제: "${proposal.topic}"`,
+              link: `/debate/live/${createdDebate.id}`
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to migrate watchers:', err);
+      }
+
+      // 5. 새 토론방으로 이동
       router.push(`/debate/live/${createdDebate.id}`);
     } catch (e: any) {
       console.error(e);
@@ -187,6 +210,18 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
                 </div>
               </div>
 
+              <div className="mb-6">
+                <h4 className="text-sm font-bold text-slate-800 mb-2">나의 주장 입력 (필수)</h4>
+                <input 
+                  type="text"
+                  maxLength={20}
+                  value={responderClaim}
+                  onChange={(e) => setResponderClaim(e.target.value)}
+                  placeholder="토론 수락 시 사용할 나의 주장을 20자 이내로 적어주세요."
+                  className="w-full bg-white border border-slate-200 rounded-xl p-4 text-sm font-bold text-slate-800 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 mb-2 shadow-inner"
+                />
+              </div>
+
               {!isRejecting ? (
                 <div className="flex flex-col sm:flex-row gap-3">
                   <button 
@@ -196,7 +231,16 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
                     거절
                   </button>
                   <button 
-                    onClick={handleAccept}
+                    onClick={() => {
+                      const claim = responderClaim.trim();
+                      if (!claim || claim.length < 5) {
+                        alert('나의 주장을 최소 5자 이상 20자 이내로 입력해야 수락할 수 있습니다.');
+                        return;
+                      }
+                      if (window.confirm('이 토론을 수락하시겠습니까? 수락 시 공개 토론방이 즉시 생성됩니다.')) {
+                        handleAccept();
+                      }
+                    }}
                     disabled={isProcessing}
                     className="flex-[2] py-4 px-6 rounded-xl font-black text-white bg-slate-900 border-2 border-slate-900 hover:bg-slate-800 hover:border-slate-800 shadow-md transition-all group flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -219,7 +263,11 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
                       취소
                     </button>
                     <button 
-                      onClick={() => router.push('/')}
+                      onClick={() => {
+                        if (window.confirm('정말 이 토론 제안을 거절하시겠습니까?')) {
+                          router.push('/');
+                        }
+                      }}
                       className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg text-sm transition-colors"
                     >
                       거절 전송

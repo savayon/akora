@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CommentSection } from '@/components/board/CommentSection';
 import { PostActionButtons } from '@/components/board/PostActionButtons';
+import { ContentRenderer } from '@/components/ContentRenderer';
 import { useAppStore } from '@/store/useAppStore';
 import { postRepository, commentRepository } from '@/repositories';
 import type { Post, BoardComment } from '@/types';
@@ -152,19 +153,19 @@ export default function FreeBoardDetailPage() {
         </div>
 
         {/* 게시글 본문 */}
-        <div className={`p-6 md:p-8 text-slate-800 leading-relaxed whitespace-pre-wrap text-lg ${post.deletedAt ? 'italic text-slate-500 bg-slate-50' : ''}`}>
+        <div className={`p-6 md:p-8 text-slate-800 leading-relaxed text-lg ${post.deletedAt ? 'italic text-slate-500 bg-slate-50' : ''}`}>
           {post.deletedAt ? (
             <div className="flex flex-col gap-2">
               <span className="font-bold text-red-500">삭제된 글입니다.</span>
               <span className="text-sm">삭제된 이유: {post.deletedReason || '사유 없음'}</span>
             </div>
           ) : (
-            post.content
+            <ContentRenderer content={post.content} />
           )}
         </div>
 
         {/* 본문 하단 액션 */}
-        <PostActionButtons initialLikes={post.likes_count} />
+        <PostActionButtons postId={post.id} initialLikes={post.likes_count} />
       </article>
 
       {/* 목록으로 버튼 */}

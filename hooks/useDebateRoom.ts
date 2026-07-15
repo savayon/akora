@@ -14,9 +14,13 @@ export const useDebateRoom = (debateId?: string) => {
   const [debateMeta, setDebateMeta] = useState<Debate | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [liveComments, setLiveComments] = useState<Comment[]>([]);
-  const [voteStats, setVoteStats] = useState({ proposer: 0, responder: 0 });
+  const [voteStats, setVoteStats] = useState({ proposer: 0, responder: 0, proposerPersuaded: 0, responderPersuaded: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [likedTurns, setLikedTurns] = useState<Record<string, boolean>>({});
+
+  const [hasPreVoted, setHasPreVoted] = useState(false);
+  const [hasFinalVoted, setHasFinalVoted] = useState(false);
+  const [showPreVoteModal, setShowPreVoteModal] = useState(false);
 
   // 데이터 로드
   useEffect(() => {
@@ -24,18 +28,27 @@ export const useDebateRoom = (debateId?: string) => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [debate, turnData, commentsData, stats, userVote] = await Promise.all([
+        const [debate, turnData, commentsData, stats, userPreVote, userFinalVote] = await Promise.all([
           debateRepository.getDebate(debateId),
           turnRepository.getTurns(debateId),
           debateCommentRepository.getComments(debateId),
           debateRepository.getVoteStats(debateId),
-          currentUser?.id ? debateRepository.getUserVote(debateId, currentUser.id) : Promise.resolve(null),
+          currentUser?.id ? debateRepository.getUserVote(debateId, currentUser.id, 'pre') : Promise.resolve(null),
+          currentUser?.id ? debateRepository.getUserVote(debateId, currentUser.id, 'final') : Promise.resolve(null),
         ]);
         setDebateMeta(debate);
         setTurns(turnData);
         setLiveComments(commentsData);
         setVoteStats(stats);
-        if (userVote) setHasVoted(true);
+        
+        if (userPreVote) setHasPreVoted(true);
+        if (userFinalVote) setHasFinalVoted(true);
+
+        const isViewer = debate && currentUser?.name !== debate.proposerName && currentUser?.name !== debate.responderName;
+        // 사전 투표 모달 로직: 관전자이고 아직 사전 투표를 안했다면 띄움 (단, preparing 상태에서는 안 띄움)
+        if (isViewer && !userPreVote && currentUser?.id && debate?.status !== 'preparing') {
+          setShowPreVoteModal(true);
+        }
         
         if (turnData.length > 0) {
           const lastTurn = turnData[turnData.length - 1];
@@ -59,7 +72,6 @@ export const useDebateRoom = (debateId?: string) => {
     : 'viewer';
               
   const [isDebateEnded, setIsDebateEnded] = useState(false);
-  const [hasVoted, setHasVoted] = useState(false);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
   
   const isFullView = role === 'viewer' || isDebateEnded;
@@ -193,6 +205,28 @@ export const useDebateRoom = (debateId?: string) => {
     }
   }, [inputValue, role, turns, replyTarget, debateMeta, debateId, isSubmitting]);
 
+  const handleSubmitClaim = useCallback(async (claim: string) => {
+    if (!debateId || !debateMeta || role === 'viewer' || isSubmitting) return;
+
+    setIsSubmitting(true);
+    try {
+      await debateRepository.submitClaim(debateId, role, claim);
+      const updatedDebate = await debateRepository.getDebate(debateId);
+      if (updatedDebate) {
+        // AI 요약 도입 전 임시 로직: 둘 다 주장이 제출되면 즉시 in_progress 로 변경
+        if (updatedDebate.proposerClaim && updatedDebate.responderClaim && updatedDebate.status === 'preparing') {
+          await debateRepository.updateStatus(debateId, 'in_progress');
+          updatedDebate.status = 'in_progress';
+        }
+        setDebateMeta(updatedDebate);
+      }
+    } catch (e: any) {
+      alert(e.message || '주장 제출에 실패했습니다.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [debateId, debateMeta, role, isSubmitting]);
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
@@ -222,23 +256,41 @@ export const useDebateRoom = (debateId?: string) => {
     }
   }, []);
 
-  const handleVote = useCallback(async (stance: 'proposer' | 'responder') => {
+  const handleVote = useCallback(async (stance: 'proposer' | 'responder', voteType: 'pre' | 'final') => {
     if (!debateId || !currentUser?.id) {
       alert('로그인이 필요합니다.');
       return;
     }
+    
+    // 최종 투표 시 확인 모달 띄우기 (기존 요구사항 유지)
+    if (voteType === 'final') {
+      const confirmMessage = '투표하시겠습니까?';
+      if (!confirm(confirmMessage)) {
+        return;
+      }
+    }
+
     try {
-      await debateRepository.submitVote(debateId, currentUser.id, stance);
-      setHasVoted(true);
-      setVoteStats(prev => ({
-        ...prev,
-        [stance]: prev[stance] + 1
-      }));
-      alert('투표가 반영되었습니다!');
+      await debateRepository.submitVote(debateId, currentUser.id, stance, voteType);
+      
+      if (voteType === 'pre') {
+        setHasPreVoted(true);
+        setShowPreVoteModal(false);
+      } else {
+        setHasFinalVoted(true);
+      }
+      
+      // 최신 stats 다시 로드
+      const newStats = await debateRepository.getVoteStats(debateId);
+      setVoteStats(newStats);
+
+      if (voteType === 'final') {
+        alert('최종 판결이 반영되었습니다! 설득 지표를 확인해보세요.');
+      }
     } catch (e: any) {
       alert(e.message || '투표 실패');
     }
-  }, [debateId, currentUser]);
+  }, [debateId, currentUser, debateMeta]);
 
   const handleLikeTurn = (turnId: string) => {
     setLikedTurns(prev => ({
@@ -252,9 +304,11 @@ export const useDebateRoom = (debateId?: string) => {
     isLoading,
     role,
     isDebateEnded, setIsDebateEnded,
-    hasVoted, setHasVoted,
-    voteStats,
+    hasPreVoted, setHasPreVoted,
+    hasFinalVoted, setHasFinalVoted,
+    showPreVoteModal, setShowPreVoteModal,
     showSummaryModal, setShowSummaryModal,
+    voteStats,
     isFullView,
     turns, setTurns,
     liveComments, setLiveComments,
@@ -268,6 +322,7 @@ export const useDebateRoom = (debateId?: string) => {
     handleMouseUp,
     handlePartialQuote,
     handleSubmit,
+    handleSubmitClaim,
     handleKeyDown,
     handleEndDebate,
     handleScrollToTarget,

@@ -5,8 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/store/useAppStore';
 import { UserAvatar } from '@/components/UserBadge';
-import { createClient } from '@/utils/supabase/client';
-import { SupabaseUserRepository } from '@/repositories/supabase/UserRepository';
+import { userRepository } from '@/repositories';
+import { AuthService } from '@/services';
 
 type ActivityItem = {
   id: string;
@@ -22,18 +22,18 @@ type Props = {
   myPosts: ActivityItem[];
   myComments: ActivityItem[];
   myDebates: ActivityItem[];
+  myWatchedDebates: ActivityItem[];
 };
 
-export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Props) {
+export function MyPageClient({ userProfile, myPosts, myComments, myDebates, myWatchedDebates }: Props) {
   const router = useRouter();
   const { setCurrentUser } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'debates'>('posts');
-  const [isPublic, setIsPublic] = useState(userProfile?.is_public_profile ?? true);
+  const [activeTab, setActiveTab] = useState<'posts' | 'comments' | 'debates' | 'watchedDebates'>('posts');
+  const [isPublic, setIsPublic] = useState(userProfile?.isPublic ?? true);
   const [isUpdatingPublic, setIsUpdatingPublic] = useState(false);
-  const supabase = createClient();
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await AuthService.signOut();
     setCurrentUser({ id: '', name: '일반시민', role: 'user', isOnboarded: true });
     router.push('/');
   };
@@ -42,9 +42,9 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
     if (!confirm('정말 아고라를 탈퇴하시겠습니까? 탈퇴 시 기존 작성한 글과 댓글은 익명으로 보존되며, 작성자 정보는 삭제됩니다. 이 작업은 되돌릴 수 없습니다.')) return;
     
     try {
-      await SupabaseUserRepository.deleteAccount(supabase);
+      await userRepository.deleteAccount();
       
-      await supabase.auth.signOut();
+      await AuthService.signOut();
       setCurrentUser({ id: '', name: '일반시민', role: 'user', isOnboarded: true });
       alert('회원탈퇴가 완료되었습니다.');
       router.push('/');
@@ -61,7 +61,7 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
     setIsUpdatingPublic(true);
     
     try {
-      await SupabaseUserRepository.updateProfileVisibility(userProfile.id, nextState);
+      await userRepository.updateProfileVisibility(userProfile.id, nextState);
     } catch (e: any) {
       alert(e.message || '설정 변경 중 오류가 발생했습니다.');
       setIsPublic(!nextState); // revert
@@ -75,7 +75,7 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
       
       {/* 1. 프로필 영역 */}
       <section className="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 md:p-8 mb-8 flex flex-col md:flex-row items-center md:items-start gap-6 relative">
-        <UserAvatar name={userProfile?.nickname} uuid={userProfile?.id} avatarUrl={userProfile?.avatar_url} size="w-24 h-24" iconSize="w-16 h-16" containerClass="border-4 border-slate-100 shadow-inner" />
+        <UserAvatar name={userProfile?.nickname} uuid={userProfile?.id} avatarUrl={userProfile?.avatarUrl} size="w-24 h-24" iconSize="w-16 h-16" containerClass="border-4 border-slate-100 shadow-inner" />
         
         <div className="flex-1 text-center md:text-left">
           <div className="flex items-center justify-center md:justify-start gap-2 mb-2">
@@ -85,7 +85,7 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
             )}
           </div>
           <p className="text-slate-500 text-sm mb-4">
-            가입일: {userProfile?.created_at ? new Date(userProfile.created_at).toLocaleDateString() : '알 수 없음'}
+            가입일: {userProfile?.createdAt ? new Date(userProfile.createdAt).toLocaleDateString() : '알 수 없음'}
           </p>
           
           {/* 활동 요약 */}
@@ -142,7 +142,7 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
             <span className="text-2xl">📝</span> 활동
           </h2>
         </div>
-        <div className="flex items-center gap-6 border-b border-slate-200 mb-6 pl-2">
+        <div className="flex items-center gap-6 border-b border-slate-200 mb-6 pl-2 overflow-x-auto whitespace-nowrap">
           <button 
             onClick={() => setActiveTab('posts')}
             className={`pb-3 text-base md:text-lg font-black transition-colors relative ${activeTab === 'posts' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
@@ -161,14 +161,23 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
             onClick={() => setActiveTab('debates')}
             className={`pb-3 text-base md:text-lg font-black transition-colors relative ${activeTab === 'debates' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
           >
-            나의 토론
+            내 토론
             {activeTab === 'debates' && <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-900 rounded-t-full"></div>}
+          </button>
+          <button 
+            onClick={() => setActiveTab('watchedDebates')}
+            className={`pb-3 text-base md:text-lg font-black transition-colors relative ${activeTab === 'watchedDebates' ? 'text-slate-900' : 'text-slate-400 hover:text-slate-600'}`}
+          >
+            관전중인 토론
+            {activeTab === 'watchedDebates' && <div className="absolute bottom-0 left-0 w-full h-1 bg-slate-900 rounded-t-full"></div>}
           </button>
         </div>
 
         <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
           {(() => {
-            const activeData = activeTab === 'posts' ? myPosts : activeTab === 'comments' ? myComments : myDebates;
+            const activeData = activeTab === 'posts' ? myPosts : 
+                               activeTab === 'comments' ? myComments : 
+                               activeTab === 'debates' ? myDebates : myWatchedDebates;
             return (
               <ul className="divide-y divide-slate-100">
                 {activeData.length > 0 ? activeData.map((item) => (
@@ -183,7 +192,9 @@ export function MyPageClient({ userProfile, myPosts, myComments, myDebates }: Pr
                   </li>
                 )) : (
                   <li className="px-6 py-12 text-center text-slate-400 text-sm font-medium">
-                    {activeTab === 'posts' ? '아직 작성한 글이 없습니다.' : activeTab === 'comments' ? '아직 작성한 댓글이 없습니다.' : '아직 참여중인 토론이 없습니다.'}
+                    {activeTab === 'posts' ? '아직 작성한 글이 없습니다.' : 
+                     activeTab === 'comments' ? '아직 작성한 댓글이 없습니다.' : 
+                     activeTab === 'debates' ? '아직 참여중인 토론이 없습니다.' : '아직 관전중인 토론이 없습니다.'}
                   </li>
                 )}
               </ul>

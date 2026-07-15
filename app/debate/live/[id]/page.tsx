@@ -13,6 +13,7 @@ import { useAppStore } from '@/store/useAppStore';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useEffect } from 'react';
 import { SupabaseDebateRepository } from '@/repositories/supabase/DebateRepository';
+import { ContentRenderer } from '@/components/ContentRenderer';
 
 export default function DebateRoomPage() {
   const { openReportModal, currentUser, setIsLoginModalOpen } = useAppStore();
@@ -23,7 +24,9 @@ export default function DebateRoomPage() {
     isLoading,
     role,
     isDebateEnded, setIsDebateEnded,
-    hasVoted, setHasVoted,
+    hasPreVoted, setHasPreVoted,
+    hasFinalVoted, setHasFinalVoted,
+    showPreVoteModal, setShowPreVoteModal,
     showSummaryModal, setShowSummaryModal,
     isFullView,
     turns,
@@ -39,6 +42,7 @@ export default function DebateRoomPage() {
     handleMouseUp,
     handlePartialQuote,
     handleSubmit,
+    handleSubmitClaim,
     handleKeyDown,
     handleEndDebate,
     handleScrollToTarget,
@@ -48,11 +52,33 @@ export default function DebateRoomPage() {
     voteStats
   } = useDebateRoom(debateId);
 
+  // 1시간 준비 기한 (생성 시간 기준 + 1시간)
+  const { timeLeft: prepareTimeLeft, isExpired: isPrepareExpired } = useCountdown(debateMeta?.createdAt || '', 1 * 60 * 60 * 1000);
+
   // 턴 답변 기한 (마지막 턴이 생성된 시간 기준 + 12시간, 없으면 토론 생성 시간 기준)
   const lastTurnTime = turns.length > 0 ? turns[turns.length - 1].createdAt : debateMeta?.createdAt;
-  const { timeLeft: turnTimeLeft, isExpired } = useCountdown(lastTurnTime || '', 12 * 60 * 60 * 1000);
+  const { timeLeft: turnTimeLeft, isExpired: isTurnExpired } = useCountdown(lastTurnTime || '', 12 * 60 * 60 * 1000);
   
+  const isExpired = debateMeta?.status === 'preparing' ? isPrepareExpired : isTurnExpired;
   const effectiveIsDebateEnded = isDebateEnded || isExpired || debateMeta?.status === 'voting' || debateMeta?.status === 'completed';
+  const isForfeitedOrAbandoned = debateMeta?.endedReason === 'forfeit' || debateMeta?.endedReason === 'abandoned';
+
+  // 기권패 처리 로직 (Preparing 단계 타임아웃)
+  useEffect(() => {
+    if (debateMeta?.status === 'preparing' && isPrepareExpired) {
+      const hasProposerClaim = !!debateMeta.proposerClaim;
+      const hasResponderClaim = !!debateMeta.responderClaim;
+      
+      let loserRole: 'proposer' | 'responder' | 'both' = 'both';
+      if (hasProposerClaim && !hasResponderClaim) loserRole = 'responder';
+      else if (!hasProposerClaim && hasResponderClaim) loserRole = 'proposer';
+
+      SupabaseDebateRepository.markAsForfeitLoss(debateId, loserRole).then(() => {
+        // 새로고침을 유도하여 상태 업데이트 반영
+        window.location.reload();
+      });
+    }
+  }, [debateMeta?.status, isPrepareExpired, debateMeta?.proposerClaim, debateMeta?.responderClaim, debateId]);
 
   // 12시간 경과 감지 시 Lazy Update
   useEffect(() => {
@@ -142,9 +168,9 @@ export default function DebateRoomPage() {
             </div>
           )}
 
-          <p className="text-slate-800 text-[14px] md:text-[15px] leading-relaxed whitespace-pre-wrap selection:bg-purple-200 selection:text-purple-900">
-            {turn.content}
-          </p>
+          <div className="text-slate-800 text-[14px] md:text-[15px] leading-relaxed selection:bg-purple-200 selection:text-purple-900">
+            <ContentRenderer content={turn.content} disablePreview={true} />
+          </div>
 
           {/* 발언 추천 표시 및 버튼 */}
           {(role === 'viewer' || isDebateEnded) && (
@@ -231,6 +257,24 @@ export default function DebateRoomPage() {
         <div className={isFullView ? 'lg:col-span-2 flex flex-col' : ''}>
         
         {effectiveIsDebateEnded ? (
+          isForfeitedOrAbandoned ? (
+            <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500 max-w-2xl mx-auto mt-12">
+              <div className="bg-white border-t-4 border-red-500 rounded-2xl p-8 shadow-sm text-center">
+                <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">⚠️</div>
+                <h2 className="text-2xl font-black text-slate-900 mb-2">토론이 취소되었습니다</h2>
+                <p className="text-slate-600 font-medium mb-6">
+                  {debateMeta.endedReason === 'abandoned' 
+                    ? '토론 당사자의 탈퇴 등으로 인해 토론이 취소되었습니다.' 
+                    : (!debateMeta.timeoutLoserRole || debateMeta.timeoutLoserRole === 'both' 
+                        ? '양측 모두 제한 시간 내에 공식 주장을 설정하지 않아 토론이 무효 처리되었습니다.' 
+                        : `${debateMeta.timeoutLoserRole === 'proposer' ? debateMeta.proposerName : debateMeta.responderName}님이 제한 시간 내에 공식 주장을 설정하지 않아 기권패 처리되었습니다.`)}
+                </p>
+                <Link href="/board/debate" className="inline-flex items-center justify-center bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-xl transition-colors shadow-sm">
+                  토론게시판으로 돌아가기
+                </Link>
+              </div>
+            </div>
+          ) : (
           <div className="space-y-12 animate-in fade-in slide-in-from-top-4 duration-500">
             
             <section className="bg-white border border-slate-200 rounded-2xl p-6 md:p-8 shadow-sm">
@@ -302,9 +346,10 @@ export default function DebateRoomPage() {
               </div>
             </section>
 
-            <VotingSection role={role} hasVoted={hasVoted} onVote={handleVote} debateMeta={debateMeta} voteStats={voteStats} />
+            <VotingSection role={role} hasFinalVoted={hasFinalVoted} onVote={(stance) => handleVote(stance, 'final')} debateMeta={debateMeta} voteStats={voteStats} />
 
           </div>
+          )
         ) : (
           <div className="space-y-8">
             {turns.map(turn => renderTurnCard(turn))}
@@ -369,18 +414,39 @@ export default function DebateRoomPage() {
       )}
 
       {/* 입력 영역 */}
-      <DebateInput
-        role={role}
-        isDebateEnded={effectiveIsDebateEnded}
-        currentTurnOwner={currentTurnOwner}
-        replyTarget={replyTarget}
-        inputValue={inputValue}
-        setInputValue={setInputValue}
-        handleKeyDown={handleKeyDown}
-        handleSubmit={handleSubmit}
-        handleEndDebate={handleEndDebate}
-        setReplyTarget={setReplyTarget}
-      />
+      {/* 입력 영역 (준비 중일 때 하단 플레이스홀더) */}
+      {debateMeta.status === 'preparing' ? (
+        <div className="bg-white border-t border-slate-200 px-4 sm:px-6 lg:px-8 py-6 z-40 sticky bottom-0">
+          <div className="max-w-4xl mx-auto text-center">
+            <div className="py-8 bg-slate-50 rounded-xl border border-slate-200 text-slate-500 font-medium">
+              {(role === 'proposer' && debateMeta.proposerClaim) || (role === 'responder' && debateMeta.responderClaim) ? (
+                <>
+                  <span className="text-green-600 font-bold">✅ 내 주장 제출 완료</span><br/>
+                  ⏳ 상대방의 제출을 기다리는 중입니다...
+                </>
+              ) : (
+                <>
+                  ⏳ 토론 당사자들이 공식 주장을 작성 중입니다...<br/>
+                  <span className="text-sm mt-2 block">1시간 내에 주장이 모두 제출되면 본격적인 토론이 시작됩니다.</span>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <DebateInput
+          role={role}
+          isDebateEnded={effectiveIsDebateEnded}
+          currentTurnOwner={currentTurnOwner}
+          replyTarget={replyTarget}
+          inputValue={inputValue}
+          setInputValue={setInputValue}
+          handleKeyDown={handleKeyDown}
+          handleSubmit={handleSubmit}
+          handleEndDebate={handleEndDebate}
+          setReplyTarget={setReplyTarget}
+        />
+      )}
 
       {showSummaryModal && role !== 'viewer' && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
@@ -411,6 +477,100 @@ export default function DebateRoomPage() {
                 className="px-6 py-2.5 bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-bold rounded-lg transition-colors text-sm"
               >
                 요약 제출하고 관전 모드로 가기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 공식 주장 제출 모달 */}
+      {debateMeta.status === 'preparing' && role !== 'viewer' && !(role === 'proposer' && debateMeta.proposerClaim) && !(role === 'responder' && debateMeta.responderClaim) && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200 relative">
+            <div className="bg-yellow-200 px-6 py-5 text-center relative">
+              <h2 className="text-xl font-black text-slate-900 mb-1">🗣️ 공식 주장 작성</h2>
+              <p className="text-slate-800 text-sm">상대방을 설득할 20자 이내의 핵심 주장을 입력해주세요.</p>
+            </div>
+            
+            <div className="p-6 bg-slate-50">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-xs font-bold text-slate-600">제출 마감까지 남은 시간</span>
+                <span className="text-sm font-black text-red-500 bg-red-50 px-2.5 py-0.5 rounded-full border border-red-200 animate-pulse">
+                  {prepareTimeLeft || "계산 중..."}
+                </span>
+              </div>
+              <input 
+                type="text"
+                maxLength={20}
+                placeholder="20자 이내로 핵심 주장을 작성해주세요."
+                className="w-full bg-white border border-slate-300 rounded-xl p-4 outline-none focus:border-yellow-300 focus:ring-4 focus:ring-yellow-300/20 transition-all font-bold text-center text-slate-800 placeholder:font-normal"
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+              />
+              <div className="text-right mt-1.5 text-xs font-bold">
+                <span className={inputValue.length >= 20 ? "text-red-500" : "text-slate-500"}>{inputValue.length}</span> <span className="text-slate-400">/ 20자</span>
+              </div>
+              
+              <button 
+                onClick={() => {
+                  if (!inputValue.trim()) return alert('주장을 입력해주세요.');
+                  handleSubmitClaim(inputValue);
+                  setInputValue('');
+                }}
+                className="w-full mt-4 bg-yellow-300 hover:bg-yellow-400 text-slate-900 font-black px-6 py-3 rounded-xl transition-colors shadow-sm"
+              >
+                주장 확정 및 제출하기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 사전 투표 모달 */}
+      {showPreVoteModal && role === 'viewer' && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200 relative">
+            <div className="bg-yellow-200 px-6 py-5 text-center">
+              <h2 className="text-xl font-black text-slate-900 mb-1">첫인상 투표 🗳️</h2>
+              <p className="text-slate-800 text-sm">토론 주제만 보았을 때, 어느 쪽의 의견에 더 마음이 가시나요?<br/>이 투표는 최종 결과가 아니며, 나중에 바꿀 수 있습니다.</p>
+            </div>
+            
+            <div className="p-6 bg-slate-50">
+              {debateMeta.topic && (
+                <div className="mb-6 text-center">
+                  <h3 className="text-lg md:text-xl font-black text-slate-900 leading-snug">
+                    {debateMeta.topic}
+                  </h3>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <button onClick={() => {
+                  if (confirm('투표하시겠습니까?')) {
+                    handleVote('responder', 'pre');
+                  }
+                }} className="flex flex-col items-center justify-center p-5 md:p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 bg-blue-50/30 transition-colors group text-left min-h-[120px]">
+                  <span className="font-black text-blue-700 text-base md:text-lg leading-snug break-keep">
+                    "{debateMeta.responderClaim || '아직 주장이 없습니다.'}"
+                  </span>
+                </button>
+                <button onClick={() => {
+                  if (confirm('투표하시겠습니까?')) {
+                    handleVote('proposer', 'pre');
+                  }
+                }} className="flex flex-col items-center justify-center p-5 md:p-6 rounded-xl border-2 border-slate-200 hover:border-orange-500 hover:bg-orange-50 bg-orange-50/30 transition-colors group text-left min-h-[120px]">
+                  <span className="font-black text-orange-600 text-base md:text-lg leading-snug break-keep">
+                    "{debateMeta.proposerClaim || debateMeta.originPreview || '아직 주장이 없습니다.'}"
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-200 flex justify-center bg-white">
+              <button 
+                onClick={() => window.history.back()}
+                className="text-sm font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1"
+              >
+                &larr; 이전 화면으로 돌아가기
               </button>
             </div>
           </div>

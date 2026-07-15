@@ -16,8 +16,8 @@ const TIPS = [
 type Props = {
   debates: any[];
   topics: any[];
-  freePosts: {id: string, title: string}[];
-  discussPosts: {id: string, title: string}[];
+  freePosts: {id: string | number, title: string}[];
+  discussPosts: {id: string | number, title: string}[];
 };
 
 export function HomeClient({ debates, topics, freePosts, discussPosts }: Props) {

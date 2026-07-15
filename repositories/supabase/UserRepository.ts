@@ -46,7 +46,7 @@ export const SupabaseUserRepository: IUserRepository = {
     // 1. 유저 기본 정보 조회
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('nickname, avatar_url, role, is_public_profile, created_at')
+      .select('nickname, avatar_url, role, is_public_profile, created_at, persuasion_count')
       .eq('id', uuid)
       .single();
 
@@ -80,7 +80,8 @@ export const SupabaseUserRepository: IUserRepository = {
       createdAt: user.created_at,
       postCount,
       commentCount,
-      debateRecord: '-' // 아직 전적 시스템 없음
+      debateRecord: '-', // 아직 전적 시스템 없음
+      persuasionCount: user.persuasion_count || 0
     };
 
     // 캐싱
@@ -109,6 +110,29 @@ export const SupabaseUserRepository: IUserRepository = {
     }
     
     // 상태가 변경되었으므로 캐시 삭제
+    profileCache.delete(uuid);
+  },
+
+  async updateUserProfile(uuid, data, client?) {
+    const supabase = client || createClient();
+    
+    // 이중 검증은 호출 측에서 하거나(서버/클라이언트 혼재 가능) 여기서 할 수 있음.
+    // onboarding/page.tsx는 클라이언트 사이드이므로 supabase.auth.getUser()를 다시 호출해도 좋음
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== uuid) {
+      throw new Error('프로필 변경 권한이 없습니다.');
+    }
+
+    const { error } = await supabase
+      .from('users')
+      .update(data)
+      .eq('id', uuid);
+
+    if (error) {
+      console.error(error);
+      throw new Error('프로필 업데이트 중 오류가 발생했습니다.');
+    }
+
     profileCache.delete(uuid);
   },
 
@@ -212,7 +236,22 @@ export const SupabaseUserRepository: IUserRepository = {
       link: `/debate/live/${d.id}`
     }));
 
-    return { myPosts, myComments, myDebates };
+    // Fetch watched debates
+    const { data: watchedData } = await supabase
+      .from('debate_followers')
+      .select('debate_id, created_at, debates!inner(id, topic, status)')
+      .eq('user_id', uuid)
+      .order('created_at', { ascending: false });
+      
+    const myWatchedDebates = (watchedData || []).map((w: any) => ({
+      id: `watched-debate-${w.debate_id}`,
+      title: w.debates?.topic || '알 수 없는 토론',
+      boardName: w.debates?.status === 'in_progress' ? '진행중인 토론 (관전)' : w.debates?.status === 'voting' ? '투표중인 토론 (관전)' : '종료된 토론 (관전)',
+      date: formatRelativeTime(w.created_at),
+      link: `/debate/live/${w.debate_id}`
+    }));
+
+    return { myPosts, myComments, myDebates, myWatchedDebates };
   },
 
   async deleteAccount(client?) {

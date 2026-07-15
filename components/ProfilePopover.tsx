@@ -129,6 +129,11 @@ export function ProfilePopover() {
                 관리자
               </span>
             )}
+            {stats.persuasionCount && stats.persuasionCount > 0 ? (
+              <span className="bg-orange-50 border border-orange-200 text-orange-600 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-black whitespace-nowrap shadow-sm" title={`설득에 성공한 횟수: ${stats.persuasionCount}회`}>
+                설득왕 {stats.persuasionCount}
+              </span>
+            ) : null}
           </h3>
           
           {stats.isPublic ? (

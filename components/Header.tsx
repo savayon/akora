@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
 import { useAppStore } from '@/store/useAppStore';
-import { createClient } from '@/utils/supabase/client';
+import { AuthService } from '@/services';
 import { useRouter } from 'next/navigation';
 import { LoginModal } from './LoginModal';
 import { UserAvatar } from './UserBadge';
@@ -13,7 +13,6 @@ import { SearchBar } from '@/components/SearchBar';
 
 export default function Header() {
   const pathname = usePathname();
-  const supabase = createClient();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   
   const { notifications, isNotiOpen, setIsNotiOpen, markAllAsRead, markAsRead, removeNotification, currentUser, setCurrentUser, isLoginModalOpen, setIsLoginModalOpen } = useAppStore();
@@ -46,17 +45,17 @@ export default function Header() {
   // Supabase 로그인 세션 감지
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+      const session = await AuthService.getCurrentSession();
       setIsLoggedIn(!!session);
     };
     checkUser();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const subscription = AuthService.onAuthStateChange((_event, session) => {
       setIsLoggedIn(!!session);
     });
 
     return () => subscription.unsubscribe();
-  }, [supabase]);
+  }, []);
 
   // 알림 목록 가져오기
   useEffect(() => {
@@ -98,7 +97,7 @@ export default function Header() {
   };
 
   const handleLogout = async () => {
-    await supabase.auth.signOut();
+    await AuthService.signOut();
     setCurrentUser({ id: '', name: '일반시민', role: 'user', isOnboarded: true });
     setIsUserMenuOpen(false);
     window.location.href = '/';

@@ -19,7 +19,7 @@ export const SupabaseProposalRepository: IProposalRepository = {
       .from('proposals')
       .insert({
         proposer_id: user.id,
-        target_id: targetUser?.id || user.id,
+        target_id: data.targetId || targetUser?.id || user.id,
         source_type: data.sourceType || 'comment',
         source_id: data.sourceId,
         topic: data.topic || '',
@@ -74,6 +74,7 @@ export const SupabaseProposalRepository: IProposalRepository = {
   },
 
   async getProposal(id) {
+    if (!id || id === 'undefined') return null;
     const supabase = createClient();
     const { data: row, error } = await supabase
       .from('proposals')
@@ -121,4 +122,76 @@ export const SupabaseProposalRepository: IProposalRepository = {
       throw new Error('요청을 처리하는 중 오류가 발생했습니다.');
     }
   },
+
+  async toggleWatchProposal(proposalId, userId) {
+    const supabase = createClient();
+    
+    // Check if already watched
+    const { data: existing } = await supabase
+      .from('proposal_watches')
+      .select('id')
+      .eq('proposal_id', proposalId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Remove watch
+      await supabase.from('proposal_watches').delete().eq('id', existing.id);
+    } else {
+      // Add watch
+      await supabase.from('proposal_watches').insert({
+        proposal_id: proposalId,
+        user_id: userId
+      });
+    }
+
+    // Get new count
+    return await this.getWatchStatus(proposalId, userId);
+  },
+
+  async getWatchStatus(proposalId, userId) {
+    const supabase = createClient();
+    
+    const { count } = await supabase
+      .from('proposal_watches')
+      .select('*', { count: 'exact', head: true })
+      .eq('proposal_id', proposalId);
+
+    let isWatched = false;
+    if (userId) {
+      const { data } = await supabase
+        .from('proposal_watches')
+        .select('id')
+        .eq('proposal_id', proposalId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (data) {
+        isWatched = true;
+      }
+    }
+
+    return {
+      isWatched,
+      watchCount: count || 0
+    };
+  },
+
+  async migrateWatchersToFollowers(proposalId: string | number, debateId: string): Promise<string[]> {
+    const supabase = createClient();
+    const { data: watchers } = await supabase
+      .from('proposal_watches')
+      .select('user_id')
+      .eq('proposal_id', proposalId);
+    
+    if (!watchers || watchers.length === 0) return [];
+
+    const followersData = watchers.map(w => ({
+      debate_id: debateId,
+      user_id: w.user_id
+    }));
+    await supabase.from('debate_followers').insert(followersData);
+    
+    return watchers.map(w => w.user_id);
+  }
 };

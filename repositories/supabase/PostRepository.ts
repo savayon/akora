@@ -18,6 +18,21 @@ export const SupabasePostRepository: IPostRepository = {
     return data.map(mapToPostListItem);
   },
 
+  async getRecentPosts(boardType, limit, client?) {
+    const supabase = client || createClient();
+    const { data, error } = await supabase
+      .from('posts')
+      .select('id, title, views_count, likes_count, comments_count, has_active_debates, created_at, author_id, deleted_at, deleted_reason, users!posts_author_id_fkey(nickname, avatar_url)')
+      .eq('board_type', boardType)
+      .eq('is_hidden', false)
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error || !data) return [];
+
+    return data.map(mapToPostListItem);
+  },
+
   async getPost(id, client?) {
     const supabase = client || createClient();
     const { data, error } = await supabase
@@ -88,6 +103,33 @@ export const SupabasePostRepository: IPostRepository = {
     const { error } = await supabase.rpc('increment_views', { post_id: id });
     if (error) {
       console.warn('Failed to increment views via RPC, fallback not implemented', error);
+    }
+  },
+
+  async togglePostLike(postId: string, userId: string): Promise<boolean> {
+    const supabase = createClient();
+    
+    // Check if already liked
+    const { data: existing } = await supabase
+      .from('post_likes')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', userId)
+      .single();
+
+    if (existing) {
+      // Remove like
+      const { error } = await supabase.from('post_likes').delete().eq('id', existing.id);
+      if (error) throw new Error('추천 취소 실패');
+      return false;
+    } else {
+      // Add like
+      const { error } = await supabase.from('post_likes').insert({
+        post_id: postId,
+        user_id: userId
+      });
+      if (error) throw new Error('추천 실패');
+      return true;
     }
   },
 };

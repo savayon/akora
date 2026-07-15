@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { AuthService } from '@/services';
 
 type Props = {
   isOpen: boolean;
@@ -9,8 +9,6 @@ type Props = {
 };
 
 export function LoginModal({ isOpen, onClose }: Props) {
-  const supabase = createClient();
-
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden';
@@ -26,17 +24,7 @@ export function LoginModal({ isOpen, onClose }: Props) {
 
   const handleKakaoLogin = async () => {
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
-    await supabase.auth.signInWithOAuth({
-      provider: 'kakao',
-      options: {
-        redirectTo: `${origin}/auth/callback`,
-        scopes: 'profile_nickname profile_image',
-        queryParams: {
-          // 사용자에게 계정 선택을 강제하기 위해 prompt 파라미터 추가
-          prompt: 'select_account',
-        },
-      },
-    });
+    await AuthService.signInWithKakao(`${origin}/auth/callback`);
   };
 
   return (

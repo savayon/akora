@@ -17,10 +17,10 @@ export default function Footer() {
         <div className="space-y-3">
           <h4 className="font-bold text-slate-700 text-sm">Service</h4>
           <ul className="space-y-1.5 text-xs">
-            <li><Link href="#" className="hover:text-slate-900 transition-colors">이용약관</Link></li>
-            <li><Link href="#" className="hover:text-slate-900 transition-colors font-bold">개인정보처리방침</Link></li>
-            <li><Link href="#" className="hover:text-slate-900 transition-colors">커뮤니티 운영정책</Link></li>
-            <li><Link href="#" className="hover:text-slate-900 transition-colors">공지사항</Link></li>
+            <li><Link href="/terms" className="hover:text-slate-900 transition-colors">이용약관</Link></li>
+            <li><Link href="/privacy" className="hover:text-slate-900 transition-colors font-bold">개인정보처리방침</Link></li>
+            <li><Link href="/guidelines" className="hover:text-slate-900 transition-colors">커뮤니티 운영정책</Link></li>
+            <li><span className="text-slate-400">공지사항(준비중)</span></li>
           </ul>
         </div>
         

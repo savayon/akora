@@ -67,7 +67,7 @@ export interface Proposal {
 // ============================================================
 // 3. Debate (토론) — 토론 세션 메타 정보
 // ============================================================
-export type DebateStatus = 'in_progress' | 'voting' | 'completed';
+export type DebateStatus = 'preparing' | 'in_progress' | 'voting' | 'completed';
 
 export interface Debate {
   id: string | number;
@@ -83,8 +83,10 @@ export interface Debate {
   originUrl: string;
   round: number;
   status: DebateStatus;
-  endedReason?: 'timeout' | 'normal' | 'abandoned';
-  timeoutLoserRole?: 'proposer' | 'responder';
+  endedReason?: 'timeout' | 'normal' | 'abandoned' | 'forfeit';
+  timeoutLoserRole?: 'proposer' | 'responder' | 'both';
+  proposerClaim?: string | null;
+  responderClaim?: string | null;
   createdAt?: string;
 }
 
@@ -136,6 +138,7 @@ export interface BoardComment extends Comment {
   hasDebate?: boolean;
   debateId?: string | number;
   debateStatus?: 'active' | 'pending' | 'rejected' | 'expired' | 'none';
+  proposalId?: string | number;
 }
 
 // ============================================================
@@ -275,6 +278,7 @@ export interface UserProfileStats {
   postCount: number;
   commentCount: number;
   debateRecord: string;
+  persuasionCount?: number;
 }
 
 // ============================================================

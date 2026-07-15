@@ -4,6 +4,7 @@ import { UserBadge } from './UserBadge';
 import { ThumbUpIcon } from '@/components/icons';
 import { useAppStore } from '@/store/useAppStore';
 import { discussionRepository } from '@/repositories';
+import { ContentRenderer } from '@/components/ContentRenderer';
 
 interface Props {
   comment: DiscussionComment;
@@ -97,9 +98,9 @@ export const DiscussionCommentItem: React.FC<Props> = ({ comment, isBest, topicA
             <span className="text-xs text-slate-500">삭제된 이유: {comment.deletedReason || '사유 없음'}</span>
           </div>
         ) : (
-          <p className="text-slate-700 text-sm md:text-base leading-relaxed my-3">
-            {comment.content}
-          </p>
+          <div className="text-slate-700 text-sm md:text-base leading-relaxed my-3">
+            <ContentRenderer content={comment.content} />
+          </div>
         )}
 
         <div className="flex items-center justify-end gap-4 text-xs font-bold text-slate-500 mt-2">

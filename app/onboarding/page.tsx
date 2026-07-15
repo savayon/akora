@@ -2,13 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { createClient } from '@/utils/supabase/client';
+import { userRepository } from '@/repositories';
 import { useAppStore } from '@/store/useAppStore';
 import { UserAvatar } from '@/components/UserBadge';
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const supabase = createClient();
   const { currentUser, setCurrentUser } = useAppStore();
   const [nickname, setNickname] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -36,12 +35,10 @@ export default function OnboardingPage() {
     setError('');
 
     try {
-      const { error: updateError } = await supabase
-        .from('users')
-        .update({ nickname: nickname.trim(), is_onboarded: true })
-        .eq('id', currentUser.id);
-
-      if (updateError) throw updateError;
+      await userRepository.updateUserProfile(currentUser.id, {
+        nickname: nickname.trim(),
+        is_onboarded: true
+      });
 
       // 로컬 상태 업데이트
       setCurrentUser({

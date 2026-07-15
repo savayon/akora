@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { CommentSection } from '@/components/board/CommentSection';
 import { PostActionButtons } from '@/components/board/PostActionButtons';
+import { ContentRenderer } from '@/components/ContentRenderer';
 import { useAppStore } from '@/store/useAppStore';
 import { postRepository, commentRepository } from '@/repositories';
 import type { Post, BoardComment } from '@/types';
@@ -105,8 +106,10 @@ export default function DiscussBoardDetailPage() {
             </div>
           </div>
         </div>
-        <div className="p-6 md:p-8 text-slate-800 leading-relaxed whitespace-pre-wrap text-lg">{post.content}</div>
-        <PostActionButtons initialLikes={post.likes_count} />
+        <div className="p-6 md:p-8 text-slate-800 leading-relaxed text-lg">
+          <ContentRenderer content={post.content} />
+        </div>
+        <PostActionButtons postId={post.id} initialLikes={post.likes_count} />
       </article>
 
       <div className="flex justify-end mb-10">

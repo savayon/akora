@@ -19,6 +19,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
   const [comments, setComments] = useState(initialComments);
   const [topLevelText, setTopLevelText] = useState('');
   const [isTopLevelProposal, setIsTopLevelProposal] = useState(false);
+  const [topLevelClaimText, setTopLevelClaimText] = useState('');
 
   const { currentUser, setDraftDebate, addNotification, setIsLoginModalOpen } = useAppStore();
 
@@ -30,6 +31,15 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
       return;
     }
     if (!topLevelText.trim() || isSubmitting) return;
+
+    if (isTopLevelProposal) {
+      const claim = topLevelClaimText.trim();
+      if (!claim || claim.length < 5) {
+        alert('토론 주장을 최소 5자 이상 20자 이내로 입력해주세요.');
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     
     try {
@@ -37,7 +47,8 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
         postId, 
         topLevelText, 
         undefined, 
-        isTopLevelProposal ? 'proposal' : 'normal'
+        isTopLevelProposal ? 'proposal' : 'normal',
+        isTopLevelProposal ? postAuthorId : undefined
       ) as BoardComment;
 
       if (isTopLevelProposal && postAuthor) {
@@ -49,16 +60,18 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
         try {
           const proposal = await proposalRepository.createProposal({
             targetName: postAuthor,
+            targetId: postAuthorId,
             sourceType: 'comment',
             sourceId: created.id,
             topic: postTitle ? `'${postTitle.length > 20 ? postTitle.substring(0, 20) + '...' : postTitle}' 관련 논쟁` : '게시글에 대한 논쟁',
-            claim: topLevelText,
+            claim: topLevelClaimText.trim(),
             excerpt: postTitle ? `[제목] ${postTitle}` : '게시글 본문'
           });
           proposalId = String(proposal.id);
         } catch (err) {
           console.error(err);
         }
+        created.proposalId = proposalId;
 
         if (postAuthorId && postAuthorId !== currentUser.id) {
           notificationRepository.createNotification(postAuthorId, {
@@ -78,6 +91,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
 
       setComments([created, ...comments]);
       setTopLevelText('');
+      setTopLevelClaimText('');
       setIsTopLevelProposal(false);
     } catch (e: any) {
       alert(e.message || '댓글 작성에 실패했습니다.');
@@ -93,7 +107,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
     }
   };
 
-  const handleSubmitReply = async (commentId: string | number, content: string, isProposal: boolean) => {
+  const handleSubmitReply = async (commentId: string | number, content: string, isProposal: boolean, claimText?: string) => {
     if (!currentUser.id) {
       setIsLoginModalOpen(true);
       return;
@@ -115,10 +129,11 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
         try {
           const proposal = await proposalRepository.createProposal({
             targetName: parentComment?.author || '',
+            targetId: targetUserId,
             sourceType: 'comment',
             sourceId: created.id,
             topic: parentComment?.author ? `${parentComment.author}님의 발언에 대한 논쟁` : '이전 발언에 대한 논쟁',
-            claim: content,
+            claim: claimText || '',
             excerpt: parentComment?.content || ''
           });
           proposalId = String(proposal.id);
@@ -151,15 +166,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
               newReply.targetUserName = c.author;
               newReply.debateStatus = 'pending';
               newReply.watchCount = 0;
-              
-              proposalRepository.createProposal({
-                targetName: c.author,
-                sourceType: 'comment',
-                sourceId: created.id,
-                topic: content.substring(0, 30) + '...',
-                claim: content,
-                excerpt: c.content.substring(0, 30) + '...'
-              }).catch(console.error);
+              newReply.proposalId = proposalId;
 
               if (c.authorId) {
                 // 알림은 위에서 일괄 처리
@@ -217,8 +224,16 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
         {isTopLevelProposal && postAuthor && (
           <div className="mb-3 text-sm text-slate-700">
             <span className="font-bold">{currentUser.name}</span>님이 <span className="font-bold">{postAuthor}</span>님에게
-            <div className="mt-1">
-              <span className="inline-block bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded text-xs mr-2">게시글 내용으로 토론을 제안했습니다!</span>
+            <div className="mt-2 mb-3 flex flex-col sm:flex-row sm:items-center gap-2">
+              <span className="inline-block bg-purple-100 text-purple-800 font-bold px-2 py-1.5 rounded text-xs shrink-0 w-max">게시글 내용으로 토론을 제안했습니다!</span>
+              <input
+                type="text"
+                maxLength={20}
+                value={topLevelClaimText}
+                onChange={(e) => setTopLevelClaimText(e.target.value)}
+                placeholder="내 주장을 20자 이내로 적어주세요 (최소 5자)"
+                className="flex-1 bg-white border border-purple-200 text-purple-900 text-sm rounded-md px-3 py-1.5 outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 shadow-inner"
+              />
             </div>
           </div>
         )}

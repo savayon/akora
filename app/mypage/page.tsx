@@ -1,43 +1,27 @@
 import { redirect } from 'next/navigation';
-import { getCurrentUser } from '@/repositories/UserRepository';
 import { userRepository } from '@/repositories';
-import { createClient } from '@/utils/supabase/server';
+import { AuthService } from '@/services';
 import { MyPageClient } from './MyPageClient';
 
+export const dynamic = 'force-dynamic';
+
 export default async function MyPage() {
-  const user = await getCurrentUser();
+  const user = await AuthService.getCurrentUser();
   if (!user) {
     redirect('/');
   }
 
-  const supabase = await createClient();
-
-  // Fetch full user profile
-  const { data: profileData } = await supabase
-    .from('users')
-    .select('id, nickname, avatar_url, created_at, is_public_profile')
-    .eq('id', user.id)
-    .single();
-
-  const fullUserProfile = profileData ? {
-    ...profileData,
-    is_public_profile: profileData.is_public_profile !== false
-  } : {
-    id: user.id,
-    nickname: user.nickname,
-    avatar_url: null,
-    created_at: new Date().toISOString(),
-    is_public_profile: true
-  };
-
-  const { myPosts, myComments, myDebates } = await userRepository.getMyPageActivity(user.id, supabase);
+  // Fetch full user profile stats
+  const userProfile = await userRepository.getProfileStats(user.id);
+  const activity = await userRepository.getMyPageActivity(user.id);
 
   return (
     <MyPageClient 
-      userProfile={fullUserProfile} 
-      myPosts={myPosts} 
-      myComments={myComments} 
-      myDebates={myDebates}
+      userProfile={userProfile} 
+      myPosts={activity.myPosts} 
+      myComments={activity.myComments} 
+      myDebates={activity.myDebates}
+      myWatchedDebates={activity.myWatchedDebates}
     />
   );
 }

@@ -3,7 +3,7 @@ import { UserAvatar } from '@/components/UserBadge';
 
 type VotingSectionProps = {
   role: 'proposer' | 'responder' | 'viewer';
-  hasVoted: boolean;
+  hasFinalVoted: boolean;
   onVote: (stance: 'proposer' | 'responder') => void;
   debateMeta: {
     proposerName: string;
@@ -13,10 +13,10 @@ type VotingSectionProps = {
     proposerAvatarUrl?: string | null;
     responderAvatarUrl?: string | null;
   };
-  voteStats: { proposer: number; responder: number };
+  voteStats: { proposer: number; responder: number; proposerPersuaded: number; responderPersuaded: number };
 };
 
-export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasVoted, onVote, debateMeta, voteStats }) => {
+export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasFinalVoted, onVote, debateMeta, voteStats }) => {
   const [timeLeft, setTimeLeft] = useState(24 * 60 * 60 - 3600); // e.g. 23 hours left
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasVoted, on
         <p className="text-slate-600 font-bold mt-2">두 사람의 주장을 모두 확인하셨나요? 더 논리적인 측에 투표해주세요!</p>
       </div>
 
-      {role === 'viewer' && !hasVoted ? (
+      {role === 'viewer' && !hasFinalVoted ? (
         <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
           <button onClick={() => onVote('responder')} className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-colors group">
             <UserAvatar name={debateMeta.responderName} uuid={debateMeta.responderId} avatarUrl={debateMeta.responderAvatarUrl} size="w-16 h-16" iconSize="w-12 h-12" containerClass="mb-3 grayscale group-hover:grayscale-0 transition-all transform group-hover:scale-110 border-2 border-blue-400" />
@@ -59,19 +59,27 @@ export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasVoted, on
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto animate-in fade-in zoom-in-95 duration-500">
           <div className="flex flex-col p-6 rounded-xl border-2 border-blue-200 bg-blue-50 relative overflow-hidden">
-            <div className="absolute top-3 left-4 text-xs font-black text-blue-500 bg-blue-100 px-2 py-0.5 rounded">방패측</div>
+
             <div className="flex items-center justify-between mt-4 mb-3">
               <UserAvatar name={debateMeta.responderName} uuid={debateMeta.responderId} avatarUrl={debateMeta.responderAvatarUrl} size="w-12 h-12" iconSize="w-8 h-8" containerClass="border-2 border-blue-400 shadow-sm" />
               <span className="font-black text-blue-600 text-3xl md:text-4xl">{responderPercent}%</span>
             </div>
             <h3 className="font-black text-slate-800 text-lg mb-2 text-right">{debateMeta.responderName}</h3>
             <div className="w-full bg-blue-200 rounded-full h-3">
-              <div className="bg-blue-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${responderPercent}%` }}></div>
+               <div className="bg-blue-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${responderPercent}%` }}></div>
             </div>
-            <p className="text-right text-xs font-bold text-slate-500 mt-2">{voteStats.responder}표</p>
+            <div className="flex justify-between items-center mt-2">
+              {voteStats.responderPersuaded >= Math.ceil(totalVotes * 0.3) && totalVotes > 0 && (
+                <span className="text-[10px] font-black text-blue-600 bg-blue-200 px-1.5 py-0.5 rounded">설득의 대가 🏅</span>
+              )}
+              <div className="text-right text-xs font-bold text-slate-500 ml-auto">
+                <span className="mr-2 text-blue-600">설득: {voteStats.responderPersuaded}명</span>
+                {voteStats.responder}표
+              </div>
+            </div>
           </div>
           <div className="flex flex-col p-6 rounded-xl border-2 border-orange-200 bg-orange-50 relative overflow-hidden">
-            <div className="absolute top-3 left-4 text-xs font-black text-orange-500 bg-orange-100 px-2 py-0.5 rounded">창측</div>
+
             <div className="flex items-center justify-between mt-4 mb-3">
               <UserAvatar name={debateMeta.proposerName} uuid={debateMeta.proposerId} avatarUrl={debateMeta.proposerAvatarUrl} size="w-12 h-12" iconSize="w-8 h-8" containerClass="border-2 border-orange-400 shadow-sm" />
               <span className="font-black text-orange-600 text-3xl md:text-4xl">{proposerPercent}%</span>
@@ -80,7 +88,15 @@ export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasVoted, on
             <div className="w-full bg-orange-200 rounded-full h-3">
               <div className="bg-orange-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${proposerPercent}%` }}></div>
             </div>
-            <p className="text-right text-xs font-bold text-slate-500 mt-2">{voteStats.proposer}표</p>
+            <div className="flex justify-between items-center mt-2">
+              {voteStats.proposerPersuaded >= Math.ceil(totalVotes * 0.3) && totalVotes > 0 && (
+                <span className="text-[10px] font-black text-orange-600 bg-orange-200 px-1.5 py-0.5 rounded">설득의 대가 🏅</span>
+              )}
+              <div className="text-right text-xs font-bold text-slate-500 ml-auto">
+                <span className="mr-2 text-orange-600">설득: {voteStats.proposerPersuaded}명</span>
+                {voteStats.proposer}표
+              </div>
+            </div>
           </div>
         </div>
       )}

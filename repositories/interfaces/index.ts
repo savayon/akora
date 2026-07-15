@@ -11,7 +11,8 @@ export interface IUserRepository {
   getCurrentUser(): Promise<{ id: string; name: string; role: string; isPublicProfile?: boolean } | null>;
   getProfileStats(uuid: string, supabaseClient?: any): Promise<import('@/types').UserProfileStats | null>;
   updateProfileVisibility(uuid: string, isPublic: boolean, supabaseClient?: any): Promise<void>;
-  getMyPageActivity(uuid: string, supabaseClient?: any): Promise<{ myPosts: any[], myComments: any[], myDebates: any[] }>;
+  updateUserProfile(uuid: string, data: { nickname?: string; is_onboarded?: boolean }, supabaseClient?: any): Promise<void>;
+  getMyPageActivity(uuid: string, supabaseClient?: any): Promise<{ myPosts: any[], myComments: any[], myDebates: any[], myWatchedDebates: any[] }>;
   deleteAccount(supabaseClient?: any): Promise<void>;
 }
 
@@ -20,11 +21,13 @@ export interface IUserRepository {
 // ============================================================
 export interface IPostRepository {
   getPosts(boardType: 'free' | 'discuss', supabaseClient?: any): Promise<PostListItem[]>;
+  getRecentPosts(boardType: 'free' | 'discuss', limit: number, supabaseClient?: any): Promise<PostListItem[]>;
   getPost(id: string, supabaseClient?: any): Promise<Post | null>;
   createPost(data: { board_type: 'free' | 'discuss'; title: string; content: string }, supabaseClient?: any): Promise<Post>;
   deletePost(id: string, supabaseClient?: any): Promise<void>;
   softDeletePost(id: string, reason: string, supabaseClient?: any): Promise<void>;
   incrementViews(id: string, supabaseClient?: any): Promise<void>;
+  togglePostLike(postId: string, userId: string): Promise<boolean>;
 }
 
 // ============================================================
@@ -35,6 +38,7 @@ export interface ICommentRepository {
   createComment(postId: string, content: string, parentId?: string, replyType?: string, targetUserId?: string): Promise<Comment>;
   deleteComment(id: string): Promise<void>;
   softDeleteComment(id: string, reason: string): Promise<void>;
+  toggleLike(commentId: string, userId: string): Promise<boolean>;
 }
 
 // ============================================================
@@ -42,6 +46,7 @@ export interface ICommentRepository {
 // ============================================================
 export interface IDiscussionRepository {
   getTopics(supabaseClient?: any): Promise<DiscussionTopic[]>;
+  getRecentTopics(limit: number, supabaseClient?: any): Promise<DiscussionTopic[]>;
   getTopic(id: string, supabaseClient?: any): Promise<DiscussionTopic | null>;
   getComments(topicId: string, supabaseClient?: any): Promise<DiscussionComment[]>;
   createTopic(data: { title: string; stanceA: string; stanceB: string }, supabaseClient?: any): Promise<DiscussionTopic>;
@@ -52,6 +57,7 @@ export interface IDiscussionRepository {
   deleteUserComments(topicId: string, supabaseClient?: any): Promise<void>;
   softDeleteTopic(id: string, reason: string, supabaseClient?: any): Promise<void>;
   softDeleteDiscussionComment(id: string, reason: string, supabaseClient?: any): Promise<void>;
+  toggleCommentLike(commentId: string | number, userId: string): Promise<boolean>;
 }
 
 // ============================================================
@@ -62,6 +68,9 @@ export interface IProposalRepository {
   getPendingProposals(userId: string): Promise<Proposal[]>;
   getProposal(id: string): Promise<Proposal | null>;
   updateStatus(id: string, status: string): Promise<void>;
+  toggleWatchProposal(proposalId: string | number, userId: string): Promise<{ isWatched: boolean; watchCount: number }>;
+  getWatchStatus(proposalId: string | number, userId: string | undefined): Promise<{ isWatched: boolean; watchCount: number }>;
+  migrateWatchersToFollowers(proposalId: string | number, debateId: string): Promise<string[]>;
 }
 
 // ============================================================
@@ -70,13 +79,16 @@ export interface IProposalRepository {
 export interface IDebateRepository {
   getDebate(debateId: string): Promise<Debate | null>;
   getActiveDebates(): Promise<Debate[]>;
+  getRecentDebates(limit: number, supabaseClient?: any): Promise<Debate[]>;
   createDebate(data: Partial<Debate>): Promise<Debate>;
   updateStatus(debateId: string, status: string): Promise<void>;
-  submitVote(debateId: string, userId: string, stance: 'proposer' | 'responder'): Promise<void>;
-  getVoteStats(debateId: string): Promise<{ proposer: number; responder: number }>;
-  getUserVote(debateId: string, userId: string): Promise<'proposer' | 'responder' | null>;
+  submitVote(debateId: string, userId: string, stance: 'proposer' | 'responder', voteType: 'pre' | 'final'): Promise<void>;
+  getVoteStats(debateId: string): Promise<{ proposer: number; responder: number; proposerPersuaded: number; responderPersuaded: number }>;
+  getUserVote(debateId: string, userId: string, voteType: 'pre' | 'final'): Promise<'proposer' | 'responder' | null>;
   getDebateByProposalId(proposalId: string | number): Promise<Debate | null>;
   markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder'): Promise<boolean>;
+  submitClaim(debateId: string, role: 'proposer' | 'responder', claim: string): Promise<void>;
+  markAsForfeitLoss(debateId: string, role: 'proposer' | 'responder' | 'both'): Promise<boolean>;
 }
 
 // ============================================================
