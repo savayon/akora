@@ -132,7 +132,7 @@ export const SupabaseProposalRepository: IProposalRepository = {
       .select('id')
       .eq('proposal_id', proposalId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
 
     if (existing) {
       // Remove watch

@@ -160,7 +160,7 @@ export default function DiscussionDetailPage({ params }: { params: Promise<{ id:
     else if (total >= 1) maxBestCount = 1;
 
     return [...comments]
-      .filter(c => c.likes > 0)
+      .filter(c => c.likes >= 5)
       .sort((a, b) => b.likes - a.likes)
       .slice(0, maxBestCount);
   };

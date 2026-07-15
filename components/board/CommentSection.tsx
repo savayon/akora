@@ -211,7 +211,7 @@ export const CommentSection: React.FC<CommentSectionProps> = ({ initialComments,
   const visibleComments = comments;
 
   const allComments = getAllComments(visibleComments);
-  const bestComment = allComments.filter(c => c.likes > 0).sort((a, b) => b.likes - a.likes)[0];
+  const bestComment = allComments.filter(c => c.likes >= 5).sort((a, b) => b.likes - a.likes)[0];
 
   return (
     <section className="mb-20">

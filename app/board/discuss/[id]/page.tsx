@@ -30,6 +30,14 @@ export default function DiscussBoardDetailPage() {
         ]);
         setPost(postData);
         setComments(commentsData);
+        
+        // 조회수 어뷰징 방지 (24시간 쿨타임)
+        const lastViewed = localStorage.getItem(`viewed_post_${postId}`);
+        const now = Date.now();
+        if (!lastViewed || now - parseInt(lastViewed) > 24 * 60 * 60 * 1000) {
+          localStorage.setItem(`viewed_post_${postId}`, now.toString());
+          postRepository.incrementViews(postId).catch(console.error);
+        }
       } catch (e) {
         console.error(e);
       } finally {
