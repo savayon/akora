@@ -83,10 +83,12 @@ export class DebateService {
    */
   static async getActiveDebateSummaries(supabaseClient?: any): Promise<DebateSummaryDto[]> {
     const debates = await debateRepository.getActiveDebates(supabaseClient);
-    const summaries = await Promise.all(
-      debates.map(debate => this.getDebateSummary(debate.id.toString(), supabaseClient))
-    );
-    return summaries.filter((s): s is DebateSummaryDto => s !== null);
+    const summaries: DebateSummaryDto[] = [];
+    for (const debate of debates) {
+      const summary = await this.getDebateSummary(debate.id.toString(), supabaseClient);
+      if (summary) summaries.push(summary);
+    }
+    return summaries;
   }
 
   /**
@@ -94,9 +96,11 @@ export class DebateService {
    */
   static async getRecentDebateSummaries(limit: number, supabaseClient?: any): Promise<DebateSummaryDto[]> {
     const debates = await debateRepository.getRecentDebates(limit, supabaseClient);
-    const summaries = await Promise.all(
-      debates.map(debate => this.getDebateSummary(debate.id.toString(), supabaseClient))
-    );
-    return summaries.filter((s): s is DebateSummaryDto => s !== null);
+    const summaries: DebateSummaryDto[] = [];
+    for (const debate of debates) {
+      const summary = await this.getDebateSummary(debate.id.toString(), supabaseClient);
+      if (summary) summaries.push(summary);
+    }
+    return summaries;
   }
 }

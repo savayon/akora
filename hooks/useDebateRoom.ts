@@ -65,8 +65,9 @@ export const useDebateRoom = (debateId?: string) => {
         setHasJudged(userHasJudged);
 
         const isViewer = debate && currentUser?.id !== debate.proposerId && currentUser?.id !== debate.responderId;
-        // 사전 투표 모달 로직: 관전자(비회원 포함)이고 아직 사전 투표를 안했다면 띄움 (단, preparing 상태에서는 안 띄움)
-        if (isViewer && !userPreVote && debate?.status !== 'preparing') {
+        // 사전 투표 모달 로직: 관전자(회원)이고 아직 사전 투표를 안했다면 띄움 (단, preparing 상태에서는 안 띄움)
+        // 비회원은 page.tsx의 로그인 강제 팝업이 먼저 뜨도록 여기서는 띄우지 않음.
+        if (isViewer && currentUser?.id && !userPreVote && debate?.status !== 'preparing') {
           setShowPreVoteModal(true);
         } else {
           setShowPreVoteModal(false);
