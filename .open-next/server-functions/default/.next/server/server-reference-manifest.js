@@ -1,1 +1,0 @@
-self.__RSC_SERVER_MANIFEST="{\"node\":{\"005cca4e76b1536adff2055c30fc5cf880a947175e\":{\"workers\":{\"app/mypage/page\":{\"moduleId\":\"2921\",\"async\":false}},\"filename\":\"../C:\\\\Users\\\\ja3hw\\\\akora_project\\\\repositories\\\\UserRepository.ts\",\"exportedName\":\"getCurrentUser\"}},\"edge\":{},\"encryptionKey\":\"process.env.NEXT_SERVER_ACTIONS_ENCRYPTION_KEY\"}"

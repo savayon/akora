@@ -1,3 +1,0 @@
-export const production = {"NEXT_PUBLIC_SUPABASE_URL":"https://bulgmphqdugfeludixuz.supabase.co","NEXT_PUBLIC_SUPABASE_ANON_KEY":"sb_publishable_bSKJC2gafSZQchljsdLNWw_h9G5hV44","NEXT_PUBLIC_KAKAO_CLIENT_ID":"4c9e1b0b30c123bf7d4d5e7d25173fe5","NEXT_PUBLIC_SITE_URL":"https://akoradebate.com"};
-export const development = {"NEXT_PUBLIC_SUPABASE_URL":"https://bulgmphqdugfeludixuz.supabase.co","NEXT_PUBLIC_SUPABASE_ANON_KEY":"sb_publishable_bSKJC2gafSZQchljsdLNWw_h9G5hV44","NEXT_PUBLIC_KAKAO_CLIENT_ID":"4c9e1b0b30c123bf7d4d5e7d25173fe5","NEXT_PUBLIC_SITE_URL":"https://akoradebate.com"};
-export const test = {};
