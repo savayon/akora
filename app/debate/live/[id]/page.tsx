@@ -8,12 +8,15 @@ import { SummaryCard } from '@/components/SummaryCard';
 import { useDebateRoom } from '@/hooks/useDebateRoom';
 import { LiveReactionPanel } from '@/components/debate/LiveReactionPanel';
 import { DebateInput } from '@/components/debate/DebateInput';
-import { VotingSection } from '@/components/debate/VotingSection';
+import JurorSubmissionPanel from '@/components/debate/JurorSubmissionPanel';
+import VerdictResultBoard from '@/components/debate/VerdictResultBoard';
 import { useAppStore } from '@/store/useAppStore';
 import { useCountdown } from '@/hooks/useCountdown';
 import { useEffect } from 'react';
 import { SupabaseDebateRepository } from '@/repositories/supabase/DebateRepository';
+import { preVoteRepository } from '@/repositories';
 import { ContentRenderer } from '@/components/ContentRenderer';
+import { TopicChangeControls } from '@/components/debate/TopicChangeControls';
 
 export default function DebateRoomPage() {
   const { openReportModal, currentUser, setIsLoginModalOpen } = useAppStore();
@@ -23,11 +26,8 @@ export default function DebateRoomPage() {
     debateMeta,
     isLoading,
     role,
-    isDebateEnded, setIsDebateEnded,
     hasPreVoted, setHasPreVoted,
-    hasFinalVoted, setHasFinalVoted,
     showPreVoteModal, setShowPreVoteModal,
-    showSummaryModal, setShowSummaryModal,
     isFullView,
     turns,
     liveComments, setLiveComments,
@@ -46,11 +46,28 @@ export default function DebateRoomPage() {
     handleKeyDown,
     handleEndDebate,
     handleScrollToTarget,
-    handleVote,
     handleLikeTurn,
-    likedTurns,
-    voteStats
+    refreshDebateMeta,
+    hasJudged,
+    judgmentsData,
+    refreshJudgments
   } = useDebateRoom(debateId);
+
+  // 사전투표 핸들러
+  const handlePreVote = async (stance: 'proposer' | 'responder') => {
+    if (!currentUser?.id) {
+      setIsLoginModalOpen(true);
+      return;
+    }
+    try {
+      await preVoteRepository.submitPreVote(debateId, currentUser.id, stance);
+      setHasPreVoted(true);
+      setShowPreVoteModal(false);
+      alert('투표가 완료되었습니다.');
+    } catch (e: any) {
+      alert(e.message || '투표 처리 중 오류가 발생했습니다.');
+    }
+  };
 
   // 1시간 준비 기한 (생성 시간 기준 + 1시간)
   const { timeLeft: prepareTimeLeft, isExpired: isPrepareExpired } = useCountdown(debateMeta?.createdAt || '', 1 * 60 * 60 * 1000);
@@ -60,12 +77,17 @@ export default function DebateRoomPage() {
   const { timeLeft: turnTimeLeft, isExpired: isTurnExpired } = useCountdown(lastTurnTime || '', 12 * 60 * 60 * 1000);
   
   const isExpired = debateMeta?.status === 'preparing' ? isPrepareExpired : isTurnExpired;
-  const effectiveIsDebateEnded = isDebateEnded || isExpired || debateMeta?.status === 'voting' || debateMeta?.status === 'completed';
+  
+  // 판정 기한 (judging_ends_at 기준)
+  const { timeLeft: judgingTimeLeft, isExpired: isJudgingExpired } = useCountdown(debateMeta?.judgingEndsAt || '', 0);
+
+  const isDebateEnded = debateMeta?.status === 'judging' || debateMeta?.status === 'completed';
+  const effectiveIsFullView = isFullView || isDebateEnded;
   const isForfeitedOrAbandoned = debateMeta?.endedReason === 'forfeit' || debateMeta?.endedReason === 'abandoned';
 
   // 기권패 처리 로직 (Preparing 단계 타임아웃)
   useEffect(() => {
-    if (debateMeta?.status === 'preparing' && isPrepareExpired) {
+    if (debateMeta?.status === 'preparing' && isPrepareExpired && !(debateMeta.proposerClaim && debateMeta.responderClaim)) {
       const hasProposerClaim = !!debateMeta.proposerClaim;
       const hasResponderClaim = !!debateMeta.responderClaim;
       
@@ -83,9 +105,11 @@ export default function DebateRoomPage() {
   // 12시간 경과 감지 시 Lazy Update
   useEffect(() => {
     if (isExpired && debateMeta?.status === 'in_progress') {
-      SupabaseDebateRepository.markAsTimeoutLoss(debateId, currentTurnOwner).catch(console.error);
+      SupabaseDebateRepository.markAsTimeoutLoss(debateId, currentTurnOwner).then(() => {
+        refreshDebateMeta();
+      }).catch(console.error);
     }
-  }, [isExpired, debateMeta?.status, debateId, currentTurnOwner]);
+  }, [isExpired, debateMeta?.status, debateId, currentTurnOwner, refreshDebateMeta]);
 
   // 로그인 상태 체크하여 비회원일 경우 로그인 팝업 띄우기
   useEffect(() => {
@@ -181,20 +205,6 @@ export default function DebateRoomPage() {
               >
                 🚨 신고
               </button>
-              <button 
-                disabled={role !== 'viewer'}
-                onClick={() => handleLikeTurn(turn.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm transition-colors ${
-                  role === 'viewer' ? 'cursor-pointer' : 'cursor-default opacity-80'
-                } ${
-                  likedTurns[turn.id] 
-                    ? 'bg-red-50 text-red-500 border border-red-300' 
-                    : 'bg-slate-50 text-slate-500 border border-slate-200 hover:bg-slate-100 hover:text-red-500 hover:border-red-200 group/like'
-                }`}
-              >
-                <svg className={`w-4 h-4 ${role === 'viewer' && !likedTurns[turn.id] ? 'group-hover/like:scale-110 transition-transform' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.514" /></svg>
-                {likedTurns[turn.id] ? 1 : 0}
-              </button>
             </div>
           )}
         </div>
@@ -222,7 +232,50 @@ export default function DebateRoomPage() {
               )}
             </div>
             
-            <h1 className="text-xl font-black text-slate-900 leading-snug mb-3">{debateMeta.topic}</h1>
+            <div className="flex flex-wrap items-center gap-2 mb-3">
+              <h1 className="text-xl font-black text-slate-900 leading-snug">{debateMeta.topic}</h1>
+              
+              <span className={`text-[11px] font-black px-2.5 py-1 rounded border ${
+                debateMeta?.status === 'judging'
+                  ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                  : debateMeta?.status === 'completed'
+                    ? 'bg-slate-100 text-slate-600 border-slate-200'
+                    : 'bg-green-100 text-green-700 border-green-200'
+              }`}>
+                {debateMeta?.status === 'judging' ? '판정중' : debateMeta?.status === 'completed' ? '종료' : '진행중'}
+              </span>
+
+              {debateMeta?.status === 'judging' && !isJudgingExpired && (
+                <span className="text-[11px] font-black bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200 animate-pulse">
+                  남은 시간: {judgingTimeLeft}
+                </span>
+              )}
+              {debateMeta?.status === 'judging' && isJudgingExpired && (
+                <span className="text-[11px] font-black bg-red-100 text-red-600 px-2 py-0.5 rounded border border-red-200">
+                  판정 마감
+                </span>
+              )}
+
+              {debateMeta.topicStatus === 'waiting' || debateMeta.topicStatus === 'generating' ? (
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-black bg-purple-100 text-purple-700 px-2.5 py-1 rounded border border-purple-200">
+                  <span className="w-3 h-3 border-2 border-purple-200 border-t-purple-600 rounded-full animate-spin" />
+                  토론 주제 정의중...
+                </span>
+              ) : debateMeta.topicStatus === 'failed' && (debateMeta.status === 'preparing' || debateMeta.status === 'in_progress') ? (
+                <span className="text-[11px] font-black px-2.5 py-1 rounded border bg-red-50 text-red-600 border-red-200">
+                  AI 주제 생성 실패
+                </span>
+              ) : null}
+            </div>
+
+            <div className="relative flex justify-end -mt-1 mb-2">
+              <TopicChangeControls
+                debate={debateMeta}
+                role={role}
+                currentUserId={currentUser.id}
+                onChanged={refreshDebateMeta}
+              />
+            </div>
             
             <Link href={debateMeta.originUrl} className="block bg-slate-50 hover:bg-slate-100 border-l-4 border-slate-300 p-2.5 rounded-r text-sm transition-colors group">
               <div className="flex items-center gap-1.5 text-xs font-bold text-slate-500 mb-1">
@@ -252,11 +305,57 @@ export default function DebateRoomPage() {
         </div>
       </header>
 
-      <main className={`w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 ${isFullView ? 'max-w-[1400px] grid grid-cols-1 lg:grid-cols-3 gap-6' : 'max-w-4xl'}`}>
+      <main className={`w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 relative ${effectiveIsFullView ? 'max-w-[1400px] grid grid-cols-1 lg:grid-cols-3 gap-6' : 'max-w-4xl'}`}>
         
-        <div className={isFullView ? 'lg:col-span-2 flex flex-col' : ''}>
+        {/* 사전투표 오버레이 */}
+        {showPreVoteModal && (
+          <div className="fixed inset-0 z-[100] flex justify-center items-center bg-slate-50/30 backdrop-blur-[2px]">
+            <div className="bg-slate-900/90 backdrop-blur-md text-white px-8 py-8 rounded-3xl shadow-2xl flex flex-col items-center gap-5 animate-in fade-in zoom-in duration-300 w-full max-w-lg border border-slate-700/50 mx-4">
+              <span className="text-5xl drop-shadow-md">👀</span>
+              <div className="text-center space-y-1.5">
+                <p className="font-black text-2xl tracking-tight">어느 주장에 동의하시나요?</p>
+                <p className="text-sm font-medium text-slate-300">투표 후 양측의 치열한 토론을 관전해보세요.</p>
+              </div>
+
+              <div className="flex w-full items-stretch gap-3 mt-4 bg-slate-800/50 p-2 rounded-2xl">
+                <button
+                  onClick={() => handlePreVote('responder')}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 bg-slate-800/80 hover:bg-blue-600 border border-slate-700 hover:border-blue-500 p-4 rounded-xl transition-all group"
+                >
+                  <span className="text-xs font-bold text-slate-400 group-hover:text-blue-200">{debateMeta.responderName}의 주장</span>
+                  <span className="text-sm font-black text-white line-clamp-2 leading-tight">
+                    "{debateMeta.responderClaim || '주장 없음'}"
+                  </span>
+                </button>
+                <div className="flex items-center justify-center px-1">
+                  <span className="text-xs font-black text-slate-500 italic">VS</span>
+                </div>
+                <button
+                  onClick={() => handlePreVote('proposer')}
+                  className="flex-1 flex flex-col items-center justify-center gap-2 bg-slate-800/80 hover:bg-orange-600 border border-slate-700 hover:border-orange-500 p-4 rounded-xl transition-all group"
+                >
+                  <span className="text-xs font-bold text-slate-400 group-hover:text-orange-200">{debateMeta.proposerName}의 주장</span>
+                  <span className="text-sm font-black text-white line-clamp-2 leading-tight">
+                    "{debateMeta.proposerClaim || '주장 없음'}"
+                  </span>
+                </button>
+              </div>
+              
+              <div className="mt-2 text-center w-full">
+                <button 
+                  onClick={() => window.history.back()}
+                  className="text-sm font-bold text-slate-400 hover:text-white transition-colors"
+                >
+                  이전으로 돌아가기 &gt;
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className={`transition-all duration-300 ${showPreVoteModal ? 'blur-[3px] opacity-60 select-none pointer-events-none' : ''} ${effectiveIsFullView ? 'lg:col-span-2 flex flex-col' : ''}`}>
         
-        {effectiveIsDebateEnded ? (
+        {isDebateEnded ? (
           isForfeitedOrAbandoned ? (
             <div className="space-y-8 animate-in fade-in slide-in-from-top-4 duration-500 max-w-2xl mx-auto mt-12">
               <div className="bg-white border-t-4 border-red-500 rounded-2xl p-8 shadow-sm text-center">
@@ -346,7 +445,39 @@ export default function DebateRoomPage() {
               </div>
             </section>
 
-            <VotingSection role={role} hasFinalVoted={hasFinalVoted} onVote={(stance) => handleVote(stance, 'final')} debateMeta={debateMeta} voteStats={voteStats} />
+            <section className="mt-8">
+
+              {debateMeta?.status === 'judging' && !hasJudged && (role === 'viewer') && (
+                <JurorSubmissionPanel 
+                  debate={debateMeta} 
+                  onSubmitted={() => refreshJudgments()} 
+                />
+              )}
+              {debateMeta?.status === 'completed' && (
+                <VerdictResultBoard 
+                  debate={debateMeta} 
+                  judgments={judgmentsData.judgments} 
+                />
+              )}
+              {debateMeta?.status === 'judging' && hasJudged && (
+                <div className="bg-blue-50 border border-blue-200 p-6 rounded-xl text-center mb-6">
+                  <h3 className="text-lg font-bold text-blue-800 mb-2">판정 참여 완료</h3>
+                  <p className="text-blue-600">
+                    다른 배심원들의 판정이 모일 때까지 기다려주세요.<br/>
+                    (현재 {judgmentsData.currentCount} / {judgmentsData.requiredCount}명 참여)
+                  </p>
+                </div>
+              )}
+              {debateMeta?.status === 'judging' && !hasJudged && (role === 'proposer' || role === 'responder') && (
+                <div className="bg-slate-50 border border-slate-200 p-6 rounded-xl text-center mb-6">
+                  <h3 className="text-lg font-bold text-slate-800 mb-2">판정 진행 중</h3>
+                  <p className="text-slate-600">
+                    관전자(배심원)들이 승패를 판정하고 있습니다.<br/>
+                    (현재 {judgmentsData.currentCount} / {judgmentsData.requiredCount}명 참여)
+                  </p>
+                </div>
+              )}
+            </section>
 
           </div>
           )
@@ -354,7 +485,7 @@ export default function DebateRoomPage() {
           <div className="space-y-8">
             {turns.map(turn => renderTurnCard(turn))}
 
-            {!effectiveIsDebateEnded && (
+            {!isDebateEnded && (
               <div className="flex items-center justify-center py-6 animate-pulse">
                 <div className="bg-white shadow-sm rounded-full px-5 py-2.5 flex items-center gap-3 border border-slate-200">
                   <span className="text-xl">⏳</span>
@@ -376,14 +507,16 @@ export default function DebateRoomPage() {
         
         </div> {/* End of left column */}
 
-        <LiveReactionPanel 
-          debateId={debateId}
-          isFullView={isFullView} 
-          role={role} 
-          comments={liveComments} 
-          voteStats={voteStats}
-          onCommentAdded={(newComment) => setLiveComments(prev => [newComment, ...prev])}
-        />
+        <div className={`transition-all duration-300 ${showPreVoteModal ? 'blur-[3px] opacity-60 select-none pointer-events-none' : ''}`}>
+          <LiveReactionPanel 
+            debateId={debateId}
+            isFullView={effectiveIsFullView}
+            role={role} 
+            comments={liveComments}
+            spectatorCount={debateMeta?.spectatorCount || 0}
+            onCommentAdded={(newComment) => setLiveComments(prev => [newComment, ...prev])}
+          />
+        </div>
       </main>
 
       {/* 텍스트 드래그(선택) 시 띄워주는 부분 인용 팝업 */}
@@ -436,7 +569,7 @@ export default function DebateRoomPage() {
       ) : (
         <DebateInput
           role={role}
-          isDebateEnded={effectiveIsDebateEnded}
+          isDebateEnded={isDebateEnded}
           currentTurnOwner={currentTurnOwner}
           replyTarget={replyTarget}
           inputValue={inputValue}
@@ -446,41 +579,6 @@ export default function DebateRoomPage() {
           handleEndDebate={handleEndDebate}
           setReplyTarget={setReplyTarget}
         />
-      )}
-
-      {showSummaryModal && role !== 'viewer' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200">
-            <div className="bg-slate-900 px-6 py-5">
-              <h2 className="text-xl font-black text-white mb-1">토론이 성공적으로 종료되었습니다! 🎉</h2>
-              <p className="text-slate-300 text-sm">관전자들이 당신의 주장을 한눈에 이해할 수 있도록,<br/>지금까지의 발언을 3줄로 요약해 주세요.</p>
-            </div>
-            
-            <div className="p-6 space-y-4 bg-slate-50">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">첫 번째 핵심 근거</label>
-                <input type="text" placeholder="가장 강력한 첫 번째 주장을 요약해 주세요." className="w-full border border-slate-300 rounded p-2.5 text-sm outline-none focus:border-yellow-400" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">두 번째 핵심 근거</label>
-                <input type="text" placeholder="주장을 뒷받침하는 두 번째 근거를 요약해 주세요." className="w-full border border-slate-300 rounded p-2.5 text-sm outline-none focus:border-yellow-400" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">세 번째 핵심 근거</label>
-                <input type="text" placeholder="마지막으로 관전자를 설득할 핵심을 요약해 주세요." className="w-full border border-slate-300 rounded p-2.5 text-sm outline-none focus:border-yellow-400" />
-              </div>
-            </div>
-
-            <div className="p-5 border-t border-slate-200 flex justify-end gap-2 bg-white">
-              <button 
-                onClick={() => setShowSummaryModal(false)}
-                className="px-6 py-2.5 bg-yellow-400 hover:bg-yellow-500 text-slate-900 font-bold rounded-lg transition-colors text-sm"
-              >
-                요약 제출하고 관전 모드로 가기
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* 공식 주장 제출 모달 */}
@@ -526,56 +624,7 @@ export default function DebateRoomPage() {
         </div>
       )}
 
-      {/* 사전 투표 모달 */}
-      {showPreVoteModal && role === 'viewer' && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden flex flex-col animate-in fade-in zoom-in duration-200 relative">
-            <div className="bg-yellow-200 px-6 py-5 text-center">
-              <h2 className="text-xl font-black text-slate-900 mb-1">첫인상 투표 🗳️</h2>
-              <p className="text-slate-800 text-sm">토론 주제만 보았을 때, 어느 쪽의 의견에 더 마음이 가시나요?<br/>이 투표는 최종 결과가 아니며, 나중에 바꿀 수 있습니다.</p>
-            </div>
-            
-            <div className="p-6 bg-slate-50">
-              {debateMeta.topic && (
-                <div className="mb-6 text-center">
-                  <h3 className="text-lg md:text-xl font-black text-slate-900 leading-snug">
-                    {debateMeta.topic}
-                  </h3>
-                </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <button onClick={() => {
-                  if (confirm('투표하시겠습니까?')) {
-                    handleVote('responder', 'pre');
-                  }
-                }} className="flex flex-col items-center justify-center p-5 md:p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 bg-blue-50/30 transition-colors group text-left min-h-[120px]">
-                  <span className="font-black text-blue-700 text-base md:text-lg leading-snug break-keep">
-                    "{debateMeta.responderClaim || '아직 주장이 없습니다.'}"
-                  </span>
-                </button>
-                <button onClick={() => {
-                  if (confirm('투표하시겠습니까?')) {
-                    handleVote('proposer', 'pre');
-                  }
-                }} className="flex flex-col items-center justify-center p-5 md:p-6 rounded-xl border-2 border-slate-200 hover:border-orange-500 hover:bg-orange-50 bg-orange-50/30 transition-colors group text-left min-h-[120px]">
-                  <span className="font-black text-orange-600 text-base md:text-lg leading-snug break-keep">
-                    "{debateMeta.proposerClaim || debateMeta.originPreview || '아직 주장이 없습니다.'}"
-                  </span>
-                </button>
-              </div>
-            </div>
 
-            <div className="p-4 border-t border-slate-200 flex justify-center bg-white">
-              <button 
-                onClick={() => window.history.back()}
-                className="text-sm font-bold text-slate-500 hover:text-slate-700 flex items-center gap-1"
-              >
-                &larr; 이전 화면으로 돌아가기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

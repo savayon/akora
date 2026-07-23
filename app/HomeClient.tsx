@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import { useAppStore } from '@/store/useAppStore';
+import { MatchingModal } from '@/components/debate/MatchingModal';
 
 const TIPS = [
   "자유게시판에 올라온 흥미로운 주장을 논제로 발전시켜보세요.",
@@ -13,20 +14,24 @@ const TIPS = [
   "토론은 서로를 존중하며 논리로 승부하는 공간입니다."
 ];
 
+import type { DiscussionTopic, PostListItem } from '@/types';
+import type { DebateSummaryDto } from '@/services/DebateService';
+
 type Props = {
-  debates: any[];
-  topics: any[];
-  freePosts: {id: string | number, title: string}[];
-  discussPosts: {id: string | number, title: string}[];
+  debates: DebateSummaryDto[];
+  topics: DiscussionTopic[];
+  freePosts: PostListItem[];
+  discussPosts: PostListItem[];
 };
 
 export function HomeClient({ debates, topics, freePosts, discussPosts }: Props) {
-  const { currentUser } = useAppStore();
+  const { currentUser, setIsLoginModalOpen } = useAppStore();
   const [isScrolled, setIsScrolled] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(true);
   const [currentTipIndex, setCurrentTipIndex] = useState(0);
+  const [isMatchingModalOpen, setIsMatchingModalOpen] = useState(false);
 
   const scrollRefTopic = useRef<HTMLDivElement>(null);
   const [canScrollLeftTopic, setCanScrollLeftTopic] = useState(false);
@@ -113,19 +118,24 @@ export function HomeClient({ debates, topics, freePosts, discussPosts }: Props) 
             감정적인 싸움 대신 구조화된 턴제 토론으로 당신의 주장을 증명하세요.
           </p>
           
-          {!currentUser?.id && (
-            <div className="mt-6 flex justify-center animate-fade-in-up-delay-3">
-              <button 
-                onClick={handleKakaoLogin}
-                className="inline-flex items-center justify-center gap-3 bg-[#FEE500] hover:bg-[#FDD800] text-black/85 font-bold py-3.5 px-10 rounded-xl transition-colors shadow-sm"
-              >
-                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current">
-                  <path d="M12 3C6.477 3 2 6.477 2 10.766c0 2.766 1.83 5.176 4.6 6.473-.153.518-.542 1.942-.562 2.05-.027.144.05.14.116.096.052-.034 1.764-1.18 2.457-1.666a11.16 11.16 0 003.389.513c5.523 0 10-3.477 10-7.766S17.523 3 12 3z"/>
-                </svg>
-                카카오로 시작하기
-              </button>
-            </div>
-          )}
+          <div className="mt-6 flex justify-center animate-fade-in-up-delay-3">
+            <button
+              onClick={() => {
+                if (!currentUser?.id) {
+                  setIsLoginModalOpen(true);
+                } else {
+                  setIsMatchingModalOpen(true);
+                }
+              }}
+              className="group relative inline-flex items-center justify-center gap-3 bg-gradient-to-r from-orange-500 to-red-500 text-white font-black py-4 px-12 rounded-full overflow-hidden shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300"
+            >
+              <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out"></div>
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-8 h-8 text-yellow-300 animate-pulse drop-shadow-md relative z-10">
+                <path fillRule="evenodd" d="M14.615 1.595a.75.75 0 0 1 .359.852L12.982 9.75h7.268a.75.75 0 0 1 .548 1.262l-10.5 11.25a.75.75 0 0 1-1.272-.71l1.992-7.302H3.75a.75.75 0 0 1-.548-1.262l10.5-11.25a.75.75 0 0 1 .913-.143Z" clipRule="evenodd" />
+              </svg>
+              <span className="text-lg tracking-wide relative z-10">1:1 랜덤 토론 시작하기</span>
+            </button>
+          </div>
         </div>
       </section>
 
@@ -161,8 +171,8 @@ export function HomeClient({ debates, topics, freePosts, discussPosts }: Props) 
               style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-8 pt-2 [&::-webkit-scrollbar]:hidden"
             >
-              {debates.map((debate, i) => (
-                <DebateCard key={i} debate={debate} />
+              {debates.slice(0, 5).map((debate, i) => (
+                <DebateCard key={i} summary={debate} />
               ))}
 
               <Link href="/debate/live" className="snap-start shrink-0 w-[240px] md:w-[280px] bg-slate-50 border-2 border-dashed border-slate-300 rounded-2xl flex flex-col items-center justify-center p-6 hover:bg-slate-100 hover:border-slate-400 transition-colors group/more">
@@ -274,6 +284,14 @@ export function HomeClient({ debates, topics, freePosts, discussPosts }: Props) 
         </section>
 
       </main>
+
+      {currentUser?.id && (
+        <MatchingModal 
+          isOpen={isMatchingModalOpen} 
+          onClose={() => setIsMatchingModalOpen(false)} 
+          userId={currentUser.id} 
+        />
+      )}
     </>
   );
 }

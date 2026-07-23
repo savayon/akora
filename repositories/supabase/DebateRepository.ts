@@ -3,8 +3,8 @@ import type { IDebateRepository } from '../interfaces';
 import type { Debate } from '@/types';
 
 export const SupabaseDebateRepository: IDebateRepository = {
-  async getDebate(debateId) {
-    const supabase = createClient();
+  async getDebate(debateId, supabaseClient) {
+    const supabase = supabaseClient || createClient();
     const { data, error } = await supabase
       .from('debates')
       .select(`
@@ -61,25 +61,34 @@ export const SupabaseDebateRepository: IDebateRepository = {
       originType: data.origin_type,
       originPreview: data.origin_preview,
       originUrl: data.origin_url,
-      round: Math.ceil((data.turns?.length || 0) / 2),
-      status: computedStatus,
-      endedReason: computedEndedReason,
-      timeoutLoserRole: computedTimeoutLoserRole,
+      round: Math.floor((data.turns?.length || 0) / 2) + 1,
+      status: data.status === 'voting' ? 'judging' : data.status,
+      endedReason: data.ended_reason,
+      timeoutLoserRole: data.timeout_loser_role,
       proposerClaim: data.proposer_claim,
       responderClaim: data.responder_claim,
+      topicStatus: data.topic_status,
+      proposerTopicEditCount: data.proposer_topic_edit_count || 0,
+      responderTopicEditCount: data.responder_topic_edit_count || 0,
+      pendingTopic: data.pending_topic,
+      topicChangeRequesterId: data.topic_change_requester_id,
+      spectatorCount: data.spectator_count || 0,
+      winnerId: data.winner_id,
       createdAt: data.created_at,
+      judgingEndsAt: data.judging_ends_at || null,
     };
   },
 
-  async getActiveDebates() {
-    const supabase = createClient();
+  async getActiveDebates(supabaseClient) {
+    const supabase = supabaseClient || createClient();
     const { data, error } = await supabase
       .from('debates')
       .select(`
         *,
         proposer:users!debates_proposer_id_fkey(nickname, avatar_url),
         responder:users!debates_responder_id_fkey(nickname, avatar_url),
-        turns(id)
+        turns(id),
+        debate_votes(user_id)
       `)
       .order('created_at', { ascending: false });
 
@@ -99,11 +108,16 @@ export const SupabaseDebateRepository: IDebateRepository = {
       originType: row.origin_type,
       originPreview: row.origin_preview,
       originUrl: row.origin_url,
-      round: Math.ceil((row.turns?.length || 0) / 2),
-      status: row.status,
+      round: Math.floor((row.turns?.length || 0) / 2) + 1,
+      status: row.status === 'voting' ? 'judging' : row.status,
       proposerClaim: row.proposer_claim,
       responderClaim: row.responder_claim,
+      topicStatus: row.topic_status,
+      proposerTopicEditCount: row.proposer_topic_edit_count || 0,
+      responderTopicEditCount: row.responder_topic_edit_count || 0,
+      spectatorCount: new Set((row.debate_votes || []).map((vote: any) => vote.user_id)).size,
       createdAt: row.created_at,
+      judgingEndsAt: row.judging_ends_at || null,
     }));
   },
 
@@ -115,7 +129,8 @@ export const SupabaseDebateRepository: IDebateRepository = {
         *,
         proposer:users!debates_proposer_id_fkey(nickname, avatar_url),
         responder:users!debates_responder_id_fkey(nickname, avatar_url),
-        turns(id)
+        turns(id),
+        debate_votes(user_id)
       `)
       .order('created_at', { ascending: false })
       .limit(limit * 2); // Fetch more to account for local filtering
@@ -136,16 +151,21 @@ export const SupabaseDebateRepository: IDebateRepository = {
       originType: row.origin_type,
       originPreview: row.origin_preview,
       originUrl: row.origin_url,
-      round: Math.ceil((row.turns?.length || 0) / 2),
-      status: row.status,
+      round: Math.floor((row.turns?.length || 0) / 2) + 1,
+      status: row.status === 'voting' ? 'judging' : row.status,
       proposerClaim: row.proposer_claim,
       responderClaim: row.responder_claim,
+      topicStatus: row.topic_status,
+      proposerTopicEditCount: row.proposer_topic_edit_count || 0,
+      responderTopicEditCount: row.responder_topic_edit_count || 0,
+      spectatorCount: new Set((row.debate_votes || []).map((vote: any) => vote.user_id)).size,
       createdAt: row.created_at,
+      judgingEndsAt: row.judging_ends_at || null,
     }));
   },
 
-  async createDebate(input) {
-    const supabase = createClient();
+  async createDebate(input, supabaseClient) {
+    const supabase = supabaseClient || createClient();
     const { data, error } = await supabase
       .from('debates')
       .insert({
@@ -182,11 +202,12 @@ export const SupabaseDebateRepository: IDebateRepository = {
       status: data.status,
       proposerClaim: data.proposer_claim,
       responderClaim: data.responder_claim,
+      judgingEndsAt: data.judging_ends_at || null,
     };
   },
 
-  async updateStatus(debateId, status) {
-    const supabase = createClient();
+  async updateStatus(debateId, status, supabaseClient) {
+    const supabase = supabaseClient || createClient();
     const { error } = await supabase.from('debates').update({ status }).eq('id', debateId);
     if (error) {
       console.error(error);
@@ -194,84 +215,9 @@ export const SupabaseDebateRepository: IDebateRepository = {
     }
   },
 
-  async submitVote(debateId: string, userId: string, stance: 'proposer' | 'responder', voteType: 'pre' | 'final') {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from('debate_votes')
-      .upsert({
-        debate_id: debateId,
-        user_id: userId,
-        vote_type: voteType,
-        stance
-      }, { onConflict: 'debate_id,user_id,vote_type' }); // Upsert to allow changing vote if needed, or simply handle it gracefully
 
-    if (error) {
-      console.error(error);
-      throw new Error('투표 실패');
-    }
-    
-    // 만약 이것이 final vote이고, pre vote와 다르다면 설득왕 카운트를 올려줘야 하는지 체크
-    // 여기서 바로 올릴 수도 있고, 나중에 배치나 투표 결과 화면에서 한꺼번에 계산해서 올려줄 수도 있음.
-    // 안전하게 하려면 여기서 DB 함수나 트리거를 사용하거나 추가 쿼리를 날릴 수 있지만, 복잡도를 낮추기 위해 나중에 계산
-  },
-
-  async getVoteStats(debateId: string) {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('debate_votes')
-      .select('user_id, stance, vote_type')
-      .eq('debate_id', debateId);
-
-    if (error || !data) return { proposer: 0, responder: 0, proposerPersuaded: 0, responderPersuaded: 0 };
-    
-    const preVotes = new Map<string, string>();
-    const finalVotes = new Map<string, string>();
-    
-    data.forEach(v => {
-      if (v.vote_type === 'pre') preVotes.set(v.user_id, v.stance);
-      else finalVotes.set(v.user_id, v.stance);
-    });
-    
-    let proposerPersuaded = 0;
-    let responderPersuaded = 0;
-    let proposer = 0;
-    let responder = 0;
-    
-    finalVotes.forEach((stance, userId) => {
-      if (stance === 'proposer') proposer++;
-      else if (stance === 'responder') responder++;
-      
-      const preStance = preVotes.get(userId);
-      if (preStance && preStance !== stance) {
-        if (stance === 'proposer') proposerPersuaded++;
-        else if (stance === 'responder') responderPersuaded++;
-      }
-    });
-    
-    return {
-      proposer,
-      responder,
-      proposerPersuaded,
-      responderPersuaded
-    };
-  },
-
-  async getUserVote(debateId: string, userId: string, voteType: 'pre' | 'final') {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('debate_votes')
-      .select('stance')
-      .eq('debate_id', debateId)
-      .eq('user_id', userId)
-      .eq('vote_type', voteType)
-      .single();
-
-    if (error || !data) return null;
-    return data.stance as 'proposer' | 'responder';
-  },
-
-  async getDebateByProposalId(proposalId: string | number) {
-    const supabase = createClient();
+  async getDebateByProposalId(proposalId: string | number, supabaseClient?: any) {
+    const supabase = supabaseClient || createClient();
     const { data, error } = await supabase
       .from('debates')
       .select('id')
@@ -282,29 +228,22 @@ export const SupabaseDebateRepository: IDebateRepository = {
     return { id: data.id } as Debate;
   },
 
-  async markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder'): Promise<boolean> {
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from('debates')
-      .update({
-        status: 'voting',
-        ended_reason: 'timeout',
-        timeout_loser_role: loserRole
-      })
-      .eq('id', debateId)
-      .eq('status', 'in_progress')
-      .select('id');
+  async markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder', supabaseClient?: any): Promise<boolean> {
+    const supabase = supabaseClient || createClient();
+    const { data, error } = await supabase.rpc('timeout_debate', {
+      p_debate_id: debateId
+    });
 
     if (error) {
-      console.error('markAsTimeoutLoss error:', error);
+      console.error('markAsTimeoutLoss RPC error:', error.message, error.details, error.hint, error);
       return false;
     }
 
-    return data && data.length > 0;
+    return !!data;
   },
 
-  async submitClaim(debateId: string, role: 'proposer' | 'responder', claim: string): Promise<void> {
-    const supabase = createClient();
+  async submitClaim(debateId: string, role: 'proposer' | 'responder', claim: string, supabaseClient?: any): Promise<void> {
+    const supabase = supabaseClient || createClient();
     const updatePayload: any = {};
     if (role === 'proposer') updatePayload.proposer_claim = claim;
     else updatePayload.responder_claim = claim;
@@ -320,8 +259,8 @@ export const SupabaseDebateRepository: IDebateRepository = {
     }
   },
 
-  async markAsForfeitLoss(debateId: string, role: 'proposer' | 'responder' | 'both'): Promise<boolean> {
-    const supabase = createClient();
+  async markAsForfeitLoss(debateId: string, role: 'proposer' | 'responder' | 'both', supabaseClient?: any): Promise<boolean> {
+    const supabase = supabaseClient || createClient();
     
     // If both forfeit, timeout_loser_role can be null, but ended_reason is forfeit
     const timeoutLoserRole = role === 'both' ? null : role;
@@ -342,5 +281,42 @@ export const SupabaseDebateRepository: IDebateRepository = {
       return false;
     }
     return data && data.length > 0;
+  },
+
+  async endDebate(debateId: string, supabaseClient?: any): Promise<boolean> {
+    const supabase = supabaseClient || createClient();
+    const { data, error } = await supabase.from('debates').update({ status: 'completed' }).eq('id', debateId).select('id');
+    return !error && data && data.length > 0;
+  },
+  async generateDebateTopic(debateId: string, proposerClaim: string, responderClaim: string, supabaseClient?: any): Promise<{ topic: string } | null> {
+    // Basic stub, real implementation would call LLM API
+    return { topic: '생성된 토론 주제' };
+  },
+  async updateDebateTopic(debateId: string, topic: string, supabaseClient?: any): Promise<void> {
+    const supabase = supabaseClient || createClient();
+    await supabase.from('debates').update({ topic }).eq('id', debateId);
+  },
+  async requestTopicChange(debateId: string, topic: string, supabaseClient?: any): Promise<{ recipientId: string }> {
+    return { recipientId: '' };
+  },
+  async approveTopicChange(debateId: string, supabaseClient?: any): Promise<void> {
+    return;
+  },
+  async rejectTopicChange(debateId: string, supabaseClient?: any): Promise<void> {
+    return;
+  },
+  getDisplayTopic(debate: Pick<Debate, 'topic' | 'topicStatus'>): string {
+    return debate.topic;
+  },
+  async getDebateStatsData(userId: string, supabaseClient?: any): Promise<any> {
+    return { totalDebates: 0, wins: 0, losses: 0, winRate: 0, rank: 'Bronze' };
+  },
+  async closeDebateWithResult(debateId: string, winnerId: string, supabaseClient?: any): Promise<boolean> {
+    const supabase = supabaseClient || createClient();
+    const { data, error } = await supabase.from('debates').update({ status: 'completed', winner_id: winnerId }).eq('id', debateId).select('id');
+    return !error && data && data.length > 0;
+  },
+  async getDebateNotificationRecipients(debateId: string, supabaseClient?: any): Promise<string[]> {
+    return [];
   }
 };

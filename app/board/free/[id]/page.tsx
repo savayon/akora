@@ -37,7 +37,9 @@ export default function FreeBoardDetailPage() {
         const now = Date.now();
         if (!lastViewed || now - parseInt(lastViewed) > 24 * 60 * 60 * 1000) {
           localStorage.setItem(`viewed_post_${postId}`, now.toString());
-          postRepository.incrementViews(postId).catch(console.error);
+          postRepository.incrementViews(postId).catch((error) => {
+            console.warn('조회수 증가를 건너뛰었습니다.', error instanceof Error ? error.message : error);
+          });
         }
       } catch (e) {
         console.error(e);

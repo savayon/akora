@@ -3,11 +3,12 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { SupabaseUserRepository } from '@/repositories/supabase/UserRepository';
+import { DebateStatsService } from '@/services';
 import type { UserProfileStats } from '@/types';
 import { UserAvatar } from './UserBadge';
 
 export function ProfilePopover() {
-  const { profilePopover, closeProfilePopover } = useAppStore();
+  const { profilePopover, closeProfilePopover, currentUser } = useAppStore();
   const { isOpen, userId, rect } = profilePopover;
   const [stats, setStats] = useState<UserProfileStats | null>(null);
   const [loading, setLoading] = useState(false);
@@ -52,9 +53,12 @@ export function ProfilePopover() {
   useEffect(() => {
     if (isOpen && userId) {
       setLoading(true);
-      SupabaseUserRepository.getProfileStats(userId)
-        .then((data) => {
-          setStats(data);
+      Promise.all([
+        SupabaseUserRepository.getProfileStats(userId),
+        DebateStatsService.getUserDebateStats(userId),
+      ])
+        .then(([profile, debateStats]) => {
+          setStats(profile ? { ...profile, debateRecord: debateStats.record } : null);
         })
         .finally(() => {
           setLoading(false);
@@ -152,8 +156,7 @@ export function ProfilePopover() {
                 </div>
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex-1 flex flex-col items-center justify-center min-w-0">
                   <span className="text-[11px] sm:text-xs text-slate-500 font-bold mb-1 truncate w-full text-center">토론 전적</span>
-                  <span className="text-lg sm:text-xl font-black text-slate-800 leading-none">-</span>
-                  <span className="text-[10px] text-slate-400 font-bold mt-1">(준비중)</span>
+                  <span className="text-xs sm:text-sm font-black text-slate-800 leading-tight text-center">{stats.debateRecord}</span>
                 </div>
               </div>
             </>
@@ -164,12 +167,15 @@ export function ProfilePopover() {
             </div>
           )}
 
-          <button 
-            disabled 
-            className="w-full mt-4 py-2.5 bg-slate-50 border border-slate-200 text-slate-400 rounded-lg font-bold text-sm transition-colors cursor-not-allowed"
-          >
-            프로필 보기 (준비중)
-          </button>
+          {currentUser.id === stats.id && (
+            <a
+              href="/mypage"
+              onClick={closeProfilePopover}
+              className="w-full mt-4 py-2.5 bg-slate-900 border border-slate-900 text-white rounded-lg font-bold text-sm text-center transition-colors hover:bg-slate-800"
+            >
+              마이페이지로 이동
+            </a>
+          )}
         </div>
       ) : (
         <div className="py-8 text-slate-500 text-sm font-bold w-full text-center">프로필을 불러올 수 없습니다.</div>

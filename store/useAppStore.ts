@@ -29,6 +29,12 @@ interface AppState {
   setDraftDebate: (draft: DraftDebate | null) => void;
   clearDraftDebate: () => void;
 
+  // TODO: Realtime 기반으로 완전히 전환되면 제거.
+  // AI 주제 생성 결과를 debateMeta.topic으로 직접 갱신하는 방식으로 대체할 것.
+  generatedDebateTopics: Record<string, string>;
+  setGeneratedDebateTopic: (debateId: string, topic: string) => void;
+  clearGeneratedDebateTopic: (debateId: string) => void;
+
   // 5. Report Modal UI State
   isReportModalOpen: boolean;
   reportTarget: { type: 'post' | 'comment'; id: string | number } | null;
@@ -90,6 +96,16 @@ export const useAppStore = create<AppState>((set) => ({
   draftDebate: null,
   setDraftDebate: (draft) => set({ draftDebate: draft }),
   clearDraftDebate: () => set({ draftDebate: null }),
+
+  generatedDebateTopics: {},
+  setGeneratedDebateTopic: (debateId, topic) => set((state) => ({
+    generatedDebateTopics: { ...state.generatedDebateTopics, [debateId]: topic },
+  })),
+  clearGeneratedDebateTopic: (debateId) => set((state) => {
+    const generatedDebateTopics = { ...state.generatedDebateTopics };
+    delete generatedDebateTopics[debateId];
+    return { generatedDebateTopics };
+  }),
 
   isReportModalOpen: false,
   reportTarget: null,

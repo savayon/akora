@@ -10,11 +10,11 @@ type LiveReactionPanelProps = {
   isFullView: boolean;
   role: 'proposer' | 'responder' | 'viewer';
   comments: Comment[];
-  voteStats: { proposer: number; responder: number };
+  spectatorCount: number;
   onCommentAdded: (comment: Comment) => void;
 };
 
-export const LiveReactionPanel: React.FC<LiveReactionPanelProps> = ({ debateId, isFullView, role, comments, voteStats, onCommentAdded }) => {
+export const LiveReactionPanel: React.FC<LiveReactionPanelProps> = ({ debateId, isFullView, role, comments, spectatorCount, onCommentAdded }) => {
   const { currentUser, setIsLoginModalOpen } = useAppStore();
   const router = useRouter();
   const [inputValue, setInputValue] = useState('');
@@ -39,7 +39,7 @@ export const LiveReactionPanel: React.FC<LiveReactionPanelProps> = ({ debateId, 
         <h3 className="font-black text-slate-800 flex items-center gap-2">
           <span>💬</span> 관전자 반응
         </h3>
-        <span className="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">{voteStats.proposer + voteStats.responder}명 참여중</span>
+        <span className="text-xs font-bold bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full">{spectatorCount}명 참여중</span>
       </div>
       
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50/50">

@@ -106,21 +106,38 @@ export const SupabasePostRepository: IPostRepository = {
     }
   },
 
-  async togglePostLike(postId: string, userId: string): Promise<boolean> {
+  async getPostLikeStatus(postId: string, userId: string): Promise<boolean> {
+    if (!userId) return false;
+
     const supabase = createClient();
-    
-    // Check if already liked
-    const { data: existing } = await supabase
+    const { data, error } = await supabase
       .from('post_likes')
       .select('id')
       .eq('post_id', postId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    if (error) throw new Error(error.message);
+    return !!data;
+  },
+
+  async togglePostLike(postId: string, userId: string): Promise<boolean> {
+    const supabase = createClient();
+    
+    // Check if already liked
+    const { data: existing, error: existingError } = await supabase
+      .from('post_likes')
+      .select('id')
+      .eq('post_id', postId)
+      .eq('user_id', userId)
+      .maybeSingle();
+
+    if (existingError) throw new Error(existingError.message);
 
     if (existing) {
       // Remove like
       const { error } = await supabase.from('post_likes').delete().eq('id', existing.id);
-      if (error) throw new Error('추천 취소 실패');
+      if (error) throw new Error(error.message);
       return false;
     } else {
       // Add like
@@ -128,7 +145,7 @@ export const SupabasePostRepository: IPostRepository = {
         post_id: postId,
         user_id: userId
       });
-      if (error) throw new Error('추천 실패');
+      if (error) throw new Error(error.message);
       return true;
     }
   },

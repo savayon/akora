@@ -2,6 +2,7 @@ import { createClient } from '@/utils/supabase/client';
 import type { ISearchRepository } from '../interfaces';
 import { SearchSort, type SearchResultItem } from '@/types';
 import { formatRelativeTime } from '@/lib/formatTime';
+import { SupabaseDebateRepository } from './DebateRepository';
 
 export const SupabaseSearchRepository: ISearchRepository = {
   async searchPosts(keyword, supabaseClient?) {
@@ -55,22 +56,24 @@ export const SupabaseSearchRepository: ISearchRepository = {
     const supabase = supabaseClient || createClient();
     const { data, error } = await supabase
       .from('debates')
-      .select('id, topic, created_at, users!debates_proposer_id_fkey(nickname)')
+      .select('id, topic, created_at, proposer_claim, responder_claim, topic_status, users!debates_proposer_id_fkey(nickname)')
       .ilike('topic', `%${keyword}%`)
       .order(SearchSort.Latest, { ascending: false });
 
     if (error || !data) return [];
 
-    return data.map((d: any): SearchResultItem & { _rawDate: string } => ({
+    return data
+      .filter((d: any) => d.proposer_claim && d.responder_claim)
+      .map((d: any): SearchResultItem & { _rawDate: string } => ({
       id: d.id,
       domain: 'debate',
-      title: d.topic,
+      title: SupabaseDebateRepository.getDisplayTopic(d),
       contentPreview: '',
       authorName: d.users?.nickname || '알 수 없음',
       createdAt: formatRelativeTime(d.created_at),
       url: `/debate/live/${d.id}`,
       _rawDate: d.created_at
-    }));
+      }));
   },
 
   async searchAll(keyword, supabaseClient?) {

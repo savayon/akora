@@ -3,11 +3,10 @@
 import React, { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { DebateCard } from '@/components/DebateCard';
-import type { DebateData } from '@/components/DebateCard';
-import { debateRepository } from '@/repositories';
+import { DebateService, type DebateSummaryDto } from '@/services/DebateService';
 
 export default function LiveDebatePage() {
-  const [debates, setDebates] = useState<DebateData[]>([]);
+  const [debates, setDebates] = useState<DebateSummaryDto[]>([]);
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
 
   // Spotlight 캐러셀 스크롤 상태
@@ -25,24 +24,8 @@ export default function LiveDebatePage() {
 
   useEffect(() => {
     const fetchDebates = async () => {
-      const data = await debateRepository.getActiveDebates();
-      setDebates(data.map((d: any, i: number) => ({
-        id: d.id,
-        title: d.topic,
-        tag: d.status === 'in_progress' ? '진행중' : d.status === 'voting' ? '투표중' : '종료',
-        tagColor: d.status === 'in_progress' ? 'bg-green-100 text-green-700 border-green-200' : d.status === 'voting' ? 'bg-yellow-100 text-yellow-700 border-yellow-200' : 'bg-slate-100 text-slate-600 border-slate-200',
-        claimA: d.proposerClaim || d.originPreview || '',
-        nickA: d.proposerName,
-        uuidA: d.proposerId || null,
-        avatarA: d.proposerAvatarUrl || null,
-        claimB: d.responderClaim || '',
-        nickB: d.responderName,
-        uuidB: d.responderId || null,
-        avatarB: d.responderAvatarUrl || null,
-        hearts: 0,
-        turns: d.round * 2,
-        status: d.status,
-      })));
+      const data = await DebateService.getActiveDebateSummaries();
+      setDebates(data);
     };
     fetchDebates();
 
@@ -63,12 +46,18 @@ export default function LiveDebatePage() {
     }
   };
 
-  const spotlightDebates = debates.filter((d: any) => d.status === 'in_progress').slice(0, 3);
+  const [page, setPage] = useState(0);
+  const PAGE_SIZE = 8;
+
+  const spotlightDebates = debates.filter((d) => d.debate.status === 'in_progress').slice(0, 3);
   
   const sortedDebates = [...debates].sort((a, b) => {
-    if (sortBy === 'popular') return b.turns - a.turns;
-    return Number(b.id) - Number(a.id);
+    if (sortBy === 'popular') return b.debate.round - a.debate.round; // Use round instead of turns
+    return Number(b.debate.id) - Number(a.debate.id);
   });
+
+  const totalPages = Math.max(1, Math.ceil(sortedDebates.length / PAGE_SIZE));
+  const pagedDebates = sortedDebates.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
@@ -103,7 +92,7 @@ export default function LiveDebatePage() {
             className="flex gap-4 md:gap-6 overflow-x-auto snap-x snap-mandatory pb-6 pt-2 px-2 [&::-webkit-scrollbar]:hidden"
           >
             {spotlightDebates.map(debate => (
-              <DebateCard key={`spotlight-${debate.id}`} debate={debate} layout="carousel" />
+              <DebateCard key={`spotlight-${debate.debate.id}`} summary={debate} layout="carousel" />
             ))}
           </div>
 
@@ -127,7 +116,7 @@ export default function LiveDebatePage() {
           <div className="relative">
             <select 
               value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as 'latest' | 'popular')}
+              onChange={(e) => { setSortBy(e.target.value as 'latest' | 'popular'); setPage(0); }}
               className="appearance-none bg-white border border-slate-200 text-slate-700 font-bold text-sm rounded-lg pl-4 pr-10 py-2 focus:outline-none focus:ring-2 focus:ring-yellow-400 cursor-pointer shadow-sm"
             >
               <option value="latest">최신순</option>
@@ -154,10 +143,46 @@ export default function LiveDebatePage() {
       {/* 컨텐츠 리스트 뷰 (세로 1열 가로확장) */}
       <div className="bg-slate-50/50 p-6 -mx-6 rounded-3xl border border-slate-100">
         <div className="flex flex-col gap-4">
-          {sortedDebates.map(debate => (
-            <DebateCard key={`d-${debate.id}`} debate={debate} layout="list" />
+          {pagedDebates.map(debate => (
+            <DebateCard key={`d-${debate.debate.id}`} summary={debate} layout="list" />
           ))}
+          {pagedDebates.length === 0 && (
+            <div className="py-16 text-center text-slate-400 font-bold">진행 중인 토론이 없습니다.</div>
+          )}
         </div>
+
+        {/* 페이지네이션 */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 mt-8">
+            <button
+              onClick={() => setPage(p => Math.max(0, p - 1))}
+              disabled={page === 0}
+              className="px-4 py-2 rounded-lg bg-white border border-slate-200 font-bold text-sm text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+            >
+              ← 이전
+            </button>
+            {Array.from({ length: totalPages }, (_, i) => (
+              <button
+                key={i}
+                onClick={() => setPage(i)}
+                className={`w-9 h-9 rounded-lg font-black text-sm transition-colors ${
+                  page === i
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            <button
+              onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+              disabled={page === totalPages - 1}
+              className="px-4 py-2 rounded-lg bg-white border border-slate-200 font-bold text-sm text-slate-600 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-slate-100 transition-colors"
+            >
+              다음 →
+            </button>
+          </div>
+        )}
       </div>
 
     </div>

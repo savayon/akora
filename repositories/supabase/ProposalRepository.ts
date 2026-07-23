@@ -127,22 +127,28 @@ export const SupabaseProposalRepository: IProposalRepository = {
     const supabase = createClient();
     
     // Check if already watched
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('proposal_watches')
       .select('id')
       .eq('proposal_id', proposalId)
       .eq('user_id', userId)
       .maybeSingle();
 
+    if (existingError) {
+      throw existingError;
+    }
+
     if (existing) {
       // Remove watch
-      await supabase.from('proposal_watches').delete().eq('id', existing.id);
+      const { error } = await supabase.from('proposal_watches').delete().eq('id', existing.id);
+      if (error) throw error;
     } else {
       // Add watch
-      await supabase.from('proposal_watches').insert({
+      const { error } = await supabase.from('proposal_watches').insert({
         proposal_id: proposalId,
         user_id: userId
       });
+      if (error) throw error;
     }
 
     // Get new count
@@ -152,19 +158,27 @@ export const SupabaseProposalRepository: IProposalRepository = {
   async getWatchStatus(proposalId, userId) {
     const supabase = createClient();
     
-    const { count } = await supabase
+    const { count, error: countError } = await supabase
       .from('proposal_watches')
       .select('*', { count: 'exact', head: true })
       .eq('proposal_id', proposalId);
 
+    if (countError) {
+      throw countError;
+    }
+
     let isWatched = false;
     if (userId) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('proposal_watches')
         .select('id')
         .eq('proposal_id', proposalId)
         .eq('user_id', userId)
         .maybeSingle();
+
+      if (error) {
+        throw error;
+      }
       
       if (data) {
         isWatched = true;

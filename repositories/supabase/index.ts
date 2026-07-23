@@ -8,3 +8,6 @@ export { SupabaseTurnRepository } from './TurnRepository';
 export { SupabaseNotificationRepository } from './NotificationRepository';
 export { SupabaseReportRepository } from './ReportRepository';
 export { SupabaseSearchRepository } from './SearchRepository';
+export { SupabaseJudgmentRepository } from './JudgmentRepository';
+export { SupabasePreVoteRepository } from './PreVoteRepository';
+export { SupabaseMatchRepository, matchRepository } from './MatchRepository';

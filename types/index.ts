@@ -67,11 +67,13 @@ export interface Proposal {
 // ============================================================
 // 3. Debate (토론) — 토론 세션 메타 정보
 // ============================================================
-export type DebateStatus = 'preparing' | 'in_progress' | 'voting' | 'completed';
+export type DebateStatus = 'preparing' | 'in_progress' | 'judging' | 'completed';
+export type DebateTopicStatus = 'waiting' | 'generating' | 'completed' | 'failed';
 
 export interface Debate {
   id: string | number;
   topic: string;
+  topicStatus?: DebateTopicStatus | null;
   proposerId?: string;
   responderId?: string;
   proposerName: string;
@@ -85,9 +87,32 @@ export interface Debate {
   status: DebateStatus;
   endedReason?: 'timeout' | 'normal' | 'abandoned' | 'forfeit';
   timeoutLoserRole?: 'proposer' | 'responder' | 'both';
+  judgingEndsAt?: string | null;
   proposerClaim?: string | null;
   responderClaim?: string | null;
+  proposerTopicEditCount?: number;
+  responderTopicEditCount?: number;
+  pendingTopic?: string | null;
+  topicChangeRequesterId?: string | null;
   createdAt?: string;
+  spectatorCount?: number;
+  requiredJurors?: number; // 배심원 필요 수 (기본값: 5)
+  winnerId?: string | null; // 최종 승리한 참가자 ID
+}
+
+// ============================================================
+// 3.5. Judgment (판정)
+// ============================================================
+export type JurorType = 'human' | 'ai' | 'expert';
+
+export interface Judgment {
+  id: string;
+  debateId: string | number;
+  jurorId: string | null;
+  jurorType: JurorType;
+  votedForId: string;
+  reason: string;
+  createdAt: string;
 }
 
 // ============================================================
@@ -111,7 +136,7 @@ export interface Turn {
 // ============================================================
 // 5. Notification (알림)
 // ============================================================
-export type NotificationType = 'proposal_received' | 'turn_arrived' | 'debate_ended';
+export type NotificationType = 'proposal_received' | 'turn_arrived' | 'debate_ended' | 'topic_change_requested';
 
 export interface Notification {
   id: string | number;

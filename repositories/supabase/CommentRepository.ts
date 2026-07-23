@@ -196,17 +196,19 @@ export const SupabaseCommentRepository: ICommentRepository = {
     const supabase = createClient();
     
     // Check if already liked
-    const { data: existing } = await supabase
+    const { data: existing, error: existingError } = await supabase
       .from('comment_likes')
       .select('id')
       .eq('comment_id', commentId)
       .eq('user_id', userId)
-      .single();
+      .maybeSingle();
+
+    if (existingError) throw new Error(existingError.message);
 
     if (existing) {
       // Remove like
       const { error } = await supabase.from('comment_likes').delete().eq('id', existing.id);
-      if (error) throw new Error('추천 취소 실패');
+      if (error) throw new Error(error.message);
       return false;
     } else {
       // Add like
@@ -214,7 +216,7 @@ export const SupabaseCommentRepository: ICommentRepository = {
         comment_id: commentId,
         user_id: userId
       });
-      if (error) throw new Error('추천 실패');
+      if (error) throw new Error(error.message);
       return true;
     }
   },

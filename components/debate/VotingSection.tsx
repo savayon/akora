@@ -34,39 +34,39 @@ export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasFinalVote
   };
 
   const totalVotes = voteStats.proposer + voteStats.responder;
-  const proposerPercent = totalVotes > 0 ? Math.round((voteStats.proposer / totalVotes) * 100) : 50;
-  const responderPercent = totalVotes > 0 ? 100 - proposerPercent : 50;
+  const proposerPercent = totalVotes > 0 ? Math.round((voteStats.proposer / totalVotes) * 100) : null;
+  const responderPercent = totalVotes > 0 ? 100 - proposerPercent! : null;
 
   return (
-    <section className="bg-white border-2 border-yellow-400 rounded-2xl p-6 md:p-8 shadow-md">
-      <div className="text-center mb-8">
-        <span className="inline-block bg-yellow-400 text-slate-900 text-xs font-black px-3 py-1 rounded-full mb-3 shadow-sm">STEP 3</span>
-        <h2 className="text-2xl font-black text-slate-900">최종 투표하기</h2>
-        <p className="text-slate-600 font-bold mt-2">두 사람의 주장을 모두 확인하셨나요? 더 논리적인 측에 투표해주세요!</p>
+    <section className="bg-white border-2 border-yellow-400 rounded-2xl p-4 md:p-6 shadow-sm mb-6">
+      <div className="text-center mb-4">
+        <h2 className="text-xl font-black text-slate-900">최종 투표하기</h2>
+        <p className="text-slate-600 font-bold mt-1 text-sm">더 논리적인 측에 투표해주세요!</p>
       </div>
 
       {role === 'viewer' && !hasFinalVoted ? (
-        <div className="grid grid-cols-2 gap-4 max-w-2xl mx-auto">
-          <button onClick={() => onVote('responder')} className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-colors group">
-            <UserAvatar name={debateMeta.responderName} uuid={debateMeta.responderId} avatarUrl={debateMeta.responderAvatarUrl} size="w-16 h-16" iconSize="w-12 h-12" containerClass="mb-3 grayscale group-hover:grayscale-0 transition-all transform group-hover:scale-110 border-2 border-blue-400" />
-            <span className="font-black text-slate-700 group-hover:text-blue-600 text-lg md:text-xl">{debateMeta.responderName}</span>
+        <div className="grid grid-cols-2 gap-4 max-w-xl mx-auto">
+          <button onClick={() => onVote('responder')} className="flex items-center justify-center gap-3 p-4 rounded-xl border-2 border-slate-200 hover:border-blue-500 hover:bg-blue-50 transition-colors group">
+            <UserAvatar name={debateMeta.responderName} uuid={debateMeta.responderId} avatarUrl={debateMeta.responderAvatarUrl} size="w-10 h-10" iconSize="w-6 h-6" containerClass="grayscale group-hover:grayscale-0 transition-all border-2 border-blue-400" />
+            <span className="font-black text-slate-700 group-hover:text-blue-600 text-base">{debateMeta.responderName}</span>
           </button>
-          <button onClick={() => onVote('proposer')} className="flex flex-col items-center justify-center p-6 rounded-xl border-2 border-slate-200 hover:border-orange-500 hover:bg-orange-50 transition-colors group">
-            <UserAvatar name={debateMeta.proposerName} uuid={debateMeta.proposerId} avatarUrl={debateMeta.proposerAvatarUrl} size="w-16 h-16" iconSize="w-12 h-12" containerClass="mb-3 grayscale group-hover:grayscale-0 transition-all transform group-hover:scale-110 border-2 border-orange-400" />
-            <span className="font-black text-slate-700 group-hover:text-orange-600 text-lg md:text-xl">{debateMeta.proposerName}</span>
+          <button onClick={() => onVote('proposer')} className="flex items-center justify-center gap-3 p-4 rounded-xl border-2 border-slate-200 hover:border-orange-500 hover:bg-orange-50 transition-colors group">
+            <UserAvatar name={debateMeta.proposerName} uuid={debateMeta.proposerId} avatarUrl={debateMeta.proposerAvatarUrl} size="w-10 h-10" iconSize="w-6 h-6" containerClass="grayscale group-hover:grayscale-0 transition-all border-2 border-orange-400" />
+            <span className="font-black text-slate-700 group-hover:text-orange-600 text-base">{debateMeta.proposerName}</span>
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-3xl mx-auto animate-in fade-in zoom-in-95 duration-500">
-          <div className="flex flex-col p-6 rounded-xl border-2 border-blue-200 bg-blue-50 relative overflow-hidden">
-
-            <div className="flex items-center justify-between mt-4 mb-3">
-              <UserAvatar name={debateMeta.responderName} uuid={debateMeta.responderId} avatarUrl={debateMeta.responderAvatarUrl} size="w-12 h-12" iconSize="w-8 h-8" containerClass="border-2 border-blue-400 shadow-sm" />
-              <span className="font-black text-blue-600 text-3xl md:text-4xl">{responderPercent}%</span>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-2xl mx-auto animate-in fade-in zoom-in-95 duration-500">
+          <div className="flex flex-col p-4 rounded-xl border-2 border-blue-200 bg-blue-50 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <UserAvatar name={debateMeta.responderName} uuid={debateMeta.responderId} avatarUrl={debateMeta.responderAvatarUrl} size="w-8 h-8" iconSize="w-5 h-5" containerClass="border border-blue-400 shadow-sm" />
+                <h3 className="font-black text-slate-800 text-sm">{debateMeta.responderName}</h3>
+              </div>
+              <span className="font-black text-blue-600 text-xl">{responderPercent === null ? '-' : `${responderPercent}%`}</span>
             </div>
-            <h3 className="font-black text-slate-800 text-lg mb-2 text-right">{debateMeta.responderName}</h3>
-            <div className="w-full bg-blue-200 rounded-full h-3">
-               <div className="bg-blue-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${responderPercent}%` }}></div>
+            <div className="w-full bg-blue-200 rounded-full h-2 mt-1">
+               <div className="bg-blue-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${responderPercent ?? 0}%` }}></div>
             </div>
             <div className="flex justify-between items-center mt-2">
               {voteStats.responderPersuaded >= Math.ceil(totalVotes * 0.3) && totalVotes > 0 && (
@@ -78,15 +78,16 @@ export const VotingSection: React.FC<VotingSectionProps> = ({ role, hasFinalVote
               </div>
             </div>
           </div>
-          <div className="flex flex-col p-6 rounded-xl border-2 border-orange-200 bg-orange-50 relative overflow-hidden">
-
-            <div className="flex items-center justify-between mt-4 mb-3">
-              <UserAvatar name={debateMeta.proposerName} uuid={debateMeta.proposerId} avatarUrl={debateMeta.proposerAvatarUrl} size="w-12 h-12" iconSize="w-8 h-8" containerClass="border-2 border-orange-400 shadow-sm" />
-              <span className="font-black text-orange-600 text-3xl md:text-4xl">{proposerPercent}%</span>
+          <div className="flex flex-col p-4 rounded-xl border-2 border-orange-200 bg-orange-50 relative overflow-hidden">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <UserAvatar name={debateMeta.proposerName} uuid={debateMeta.proposerId} avatarUrl={debateMeta.proposerAvatarUrl} size="w-8 h-8" iconSize="w-5 h-5" containerClass="border border-orange-400 shadow-sm" />
+                <h3 className="font-black text-slate-800 text-sm">{debateMeta.proposerName}</h3>
+              </div>
+              <span className="font-black text-orange-600 text-xl">{proposerPercent === null ? '-' : `${proposerPercent}%`}</span>
             </div>
-            <h3 className="font-black text-slate-800 text-lg mb-2 text-right">{debateMeta.proposerName}</h3>
-            <div className="w-full bg-orange-200 rounded-full h-3">
-              <div className="bg-orange-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${proposerPercent}%` }}></div>
+            <div className="w-full bg-orange-200 rounded-full h-2 mt-1">
+              <div className="bg-orange-500 h-3 rounded-full transition-all duration-1000" style={{ width: `${proposerPercent ?? 0}%` }}></div>
             </div>
             <div className="flex justify-between items-center mt-2">
               {voteStats.proposerPersuaded >= Math.ceil(totalVotes * 0.3) && totalVotes > 0 && (

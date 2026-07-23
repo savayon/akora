@@ -38,8 +38,8 @@ export function DebateCommentSection({
   return (
     <div className="relative mt-8">
       {!userStance && (
-        <div className="absolute inset-0 z-20 flex items-center justify-center">
-          <div className="bg-slate-900/80 backdrop-blur-md text-white px-8 py-6 rounded-2xl shadow-2xl flex flex-col items-center gap-3 animate-in fade-in zoom-in duration-300">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-50/30 backdrop-blur-[2px]">
+          <div className="bg-slate-900/90 backdrop-blur-md text-white px-8 py-8 rounded-3xl shadow-2xl flex flex-col items-center gap-4 animate-in fade-in zoom-in duration-300 mx-4 border border-slate-700/50">
             <span className="text-4xl">👀</span>
             <p className="font-black text-lg">어느 진영에 동의하시나요?</p>
             <p className="text-sm font-medium text-slate-300">투표 후 양측의 자세한 의견을 확인하고 토론에 참여해보세요.</p>

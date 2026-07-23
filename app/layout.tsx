@@ -36,18 +36,18 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <head>
-        <script 
-          async 
+        <Script 
           src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-3068766287086121" 
           crossOrigin="anonymous"
-        ></script>
+          strategy="lazyOnload"
+        />
       </head>
       <body className="min-h-full flex flex-col bg-gray-50 text-slate-900 font-sans">
         <AuthProvider>
           <Header />
           <div className="flex-1 w-full max-w-[1536px] mx-auto px-4 flex justify-center relative items-stretch">
             {/* 좌측 스크롤 추적 광고 배너 */}
-            <FloatingAdBanner side="left" imageUrl="/mock-ad-left.png" />
+            {/* <FloatingAdBanner side="left" imageUrl="/mock-ad-left.png" /> */}
 
             {/* 메인 콘텐츠 영역 */}
             <main className="flex-1 min-w-0 w-full max-w-5xl">
@@ -55,7 +55,7 @@ export default function RootLayout({
             </main>
 
             {/* 우측 고정 광고 배너 (스크롤 미추적) */}
-            <FloatingAdBanner side="right" imageUrl="/mock-ad-right.png" type="static" />
+            {/* <FloatingAdBanner side="right" imageUrl="/mock-ad-right.png" type="static" /> */}
           </div>
           <ReportModal />
           <ProfilePopover />

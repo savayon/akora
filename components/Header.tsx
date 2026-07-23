@@ -45,8 +45,13 @@ export default function Header() {
   // Supabase 로그인 세션 감지
   useEffect(() => {
     const checkUser = async () => {
-      const session = await AuthService.getCurrentSession();
-      setIsLoggedIn(!!session);
+      try {
+        const session = await AuthService.getCurrentSession();
+        setIsLoggedIn(!!session);
+      } catch (error) {
+        setIsLoggedIn(false);
+        console.warn('헤더 인증 세션을 확인하지 못했습니다.', error instanceof Error ? error.message : error);
+      }
     };
     checkUser();
 
@@ -62,7 +67,9 @@ export default function Header() {
     if (currentUser && currentUser.id) {
       notificationRepository.getUserNotifications(currentUser.id).then((fetchedNotis: any) => {
         useAppStore.setState({ notifications: fetchedNotis });
-      }).catch(console.error);
+      }).catch((error) => {
+        console.warn('헤더 알림을 불러오지 못했습니다.', error instanceof Error ? error.message : error);
+      });
     }
   }, [currentUser, isNotiOpen]);
 

@@ -14,7 +14,7 @@ export const SupabaseNotificationRepository: INotificationRepository = {
       .limit(20);
 
     if (error) {
-      console.error('Fetch Noti Error:', error);
+      console.warn('알림 목록을 불러오지 못했습니다.', error.message);
       return [];
     }
     if (!data) return [];

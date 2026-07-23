@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Turn, Debate, SelectionPopup } from '@/types';
 import { useAppStore } from '@/store/useAppStore';
-import { turnRepository, debateRepository, debateCommentRepository } from '@/repositories';
+import { turnRepository, debateRepository, debateCommentRepository, judgmentRepository, preVoteRepository } from '@/repositories';
+import { TurnService } from '@/services';
+import { createClient as createSupabaseClient } from '@/utils/supabase/client';
 import type { Comment } from '@/types';
 
 /**
@@ -12,6 +14,7 @@ export const useDebateRoom = (debateId?: string) => {
   const { currentUser } = useAppStore();
   
   const [debateMeta, setDebateMeta] = useState<Debate | null>(null);
+  const debateMetaRef = useRef<Debate | null>(null);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [liveComments, setLiveComments] = useState<Comment[]>([]);
   const [voteStats, setVoteStats] = useState({ proposer: 0, responder: 0, proposerPersuaded: 0, responderPersuaded: 0 });
@@ -19,8 +22,18 @@ export const useDebateRoom = (debateId?: string) => {
   const [likedTurns, setLikedTurns] = useState<Record<string, boolean>>({});
 
   const [hasPreVoted, setHasPreVoted] = useState(false);
-  const [hasFinalVoted, setHasFinalVoted] = useState(false);
   const [showPreVoteModal, setShowPreVoteModal] = useState(false);
+
+  // 배심원(Judgment) 상태
+  const [hasJudged, setHasJudged] = useState(false);
+  
+  interface JudgmentsData {
+    judgments: import('@/types').Judgment[];
+    currentCount: number;
+    requiredCount: number;
+  }
+  
+  const [judgmentsInfo, setJudgmentsInfo] = useState<JudgmentsData>({ judgments: [], currentCount: 0, requiredCount: 5 });
 
   // 데이터 로드
   useEffect(() => {
@@ -28,26 +41,35 @@ export const useDebateRoom = (debateId?: string) => {
     const fetchData = async () => {
       setIsLoading(true);
       try {
-        const [debate, turnData, commentsData, stats, userPreVote, userFinalVote] = await Promise.all([
+        const [debate, turnData, commentsData, userPreVote, judgmentsResult, userHasJudged] = await Promise.all([
           debateRepository.getDebate(debateId),
           turnRepository.getTurns(debateId),
           debateCommentRepository.getComments(debateId),
-          debateRepository.getVoteStats(debateId),
-          currentUser?.id ? debateRepository.getUserVote(debateId, currentUser.id, 'pre') : Promise.resolve(null),
-          currentUser?.id ? debateRepository.getUserVote(debateId, currentUser.id, 'final') : Promise.resolve(null),
+          currentUser?.id ? preVoteRepository.getUserPreVote(debateId, currentUser.id) : Promise.resolve(null),
+          judgmentRepository.getJudgments(debateId),
+          currentUser?.id ? judgmentRepository.hasUserJudged(debateId, currentUser.id) : Promise.resolve(false),
         ]);
-        setDebateMeta(debate);
+        const generatedTopic = useAppStore.getState().generatedDebateTopics[debateId];
+        const debateWithGeneratedTopic = (debate && generatedTopic
+          ? { ...debate, topic: generatedTopic, topicStatus: 'completed' as const }
+          : debate) as import('@/types').Debate | null;
+        debateMetaRef.current = debateWithGeneratedTopic;
+        setDebateMeta(debateWithGeneratedTopic);
+        if (generatedTopic) useAppStore.getState().clearGeneratedDebateTopic(debateId);
         setTurns(turnData);
         setLiveComments(commentsData);
-        setVoteStats(stats);
         
         if (userPreVote) setHasPreVoted(true);
-        if (userFinalVote) setHasFinalVoted(true);
+        
+        setJudgmentsInfo(judgmentsResult);
+        setHasJudged(userHasJudged);
 
-        const isViewer = debate && currentUser?.name !== debate.proposerName && currentUser?.name !== debate.responderName;
-        // 사전 투표 모달 로직: 관전자이고 아직 사전 투표를 안했다면 띄움 (단, preparing 상태에서는 안 띄움)
-        if (isViewer && !userPreVote && currentUser?.id && debate?.status !== 'preparing') {
+        const isViewer = debate && currentUser?.id !== debate.proposerId && currentUser?.id !== debate.responderId;
+        // 사전 투표 모달 로직: 관전자(비회원 포함)이고 아직 사전 투표를 안했다면 띄움 (단, preparing 상태에서는 안 띄움)
+        if (isViewer && !userPreVote && debate?.status !== 'preparing') {
           setShowPreVoteModal(true);
+        } else {
+          setShowPreVoteModal(false);
         }
         
         if (turnData.length > 0) {
@@ -66,13 +88,57 @@ export const useDebateRoom = (debateId?: string) => {
     fetchData();
   }, [debateId, currentUser?.id]);
 
-  const role: 'proposer' | 'responder' | 'viewer' = 
-    debateMeta && currentUser.name === debateMeta.proposerName ? 'proposer' 
-    : debateMeta && currentUser.name === debateMeta.responderName ? 'responder' 
+  useEffect(() => {
+    if (!debateId) return;
+
+    return useAppStore.subscribe((state, previousState) => {
+      const generatedTopic = state.generatedDebateTopics[debateId];
+      if (!generatedTopic || generatedTopic === previousState.generatedDebateTopics[debateId] || !debateMetaRef.current) return;
+
+      const updatedDebate = {
+        ...debateMetaRef.current,
+        topic: generatedTopic,
+        topicStatus: 'completed' as const,
+      };
+      debateMetaRef.current = updatedDebate;
+      setDebateMeta(updatedDebate);
+      state.clearGeneratedDebateTopic(debateId);
+    });
+  }, [debateId]);
+
+  useEffect(() => {
+    if (!debateId) return;
+
+    const supabase = createSupabaseClient();
+    const channel = supabase
+      .channel(`debate-topic-${debateId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'debates', filter: `id=eq.${debateId}` },
+        (payload) => {
+          console.info(`[Debate ${debateId}] Realtime UPDATE`, payload.new);
+          const updated = payload.new as { topic?: string | null; topic_status?: Debate['topicStatus']; status?: Debate['status'] };
+          setDebateMeta((previous) => previous ? {
+            ...previous,
+            topic: updated.topic?.trim() || '토론 주제 정의중...',
+            topicStatus: updated.topic_status || previous.topicStatus,
+            status: updated.status || previous.status,
+          } : previous);
+        },
+      )
+      .subscribe((status) => console.info(`[Debate ${debateId}] Realtime subscription`, status));
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [debateId]);
+
+  const role: 'proposer' | 'responder' | 'viewer' =
+    debateMeta && currentUser.id === debateMeta.proposerId ? 'proposer'
+    : debateMeta && currentUser.id === debateMeta.responderId ? 'responder'
     : 'viewer';
               
-  const [isDebateEnded, setIsDebateEnded] = useState(false);
-  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const isDebateEnded = debateMeta?.status === 'judging' || debateMeta?.status === 'completed';
   
   const isFullView = role === 'viewer' || isDebateEnded;
   
@@ -97,6 +163,12 @@ export const useDebateRoom = (debateId?: string) => {
   const [chatPage, setChatPage] = useState(0);
   const itemsPerPage = 3;
   const totalChatPages = Math.ceil(turns.length / itemsPerPage);
+
+  const refreshDebateMeta = useCallback(async () => {
+    if (!debateId) return;
+    const debate = await debateRepository.getDebate(debateId);
+    if (debate) setDebateMeta(debate);
+  }, [debateId]);
 
   useEffect(() => {
     if (!isDebateEnded || role !== 'viewer') {
@@ -185,12 +257,15 @@ export const useDebateRoom = (debateId?: string) => {
     
     try {
       const turnNum = role === 'proposer' ? Math.ceil(turns.length / 2) + 1 : Math.ceil(turns.length / 2);
-      const newTurn = await turnRepository.addTurn(debateId, {
+      const newTurn = await TurnService.addTurn(debateId, {
         turnNum,
         authorRole: role as any,
         content: inputValue,
         quotedTurnId: replyTarget ? replyTarget.quotedTurnId : undefined,
         quotedExcerpt: replyTarget ? replyTarget.quotedExcerpt : undefined,
+      }, {
+        id: currentUser.id,
+        name: currentUser.name,
       });
 
       setTurns([...turns, newTurn]);
@@ -213,11 +288,6 @@ export const useDebateRoom = (debateId?: string) => {
       await debateRepository.submitClaim(debateId, role, claim);
       const updatedDebate = await debateRepository.getDebate(debateId);
       if (updatedDebate) {
-        // AI 요약 도입 전 임시 로직: 둘 다 주장이 제출되면 즉시 in_progress 로 변경
-        if (updatedDebate.proposerClaim && updatedDebate.responderClaim && updatedDebate.status === 'preparing') {
-          await debateRepository.updateStatus(debateId, 'in_progress');
-          updatedDebate.status = 'in_progress';
-        }
         setDebateMeta(updatedDebate);
       }
     } catch (e: any) {
@@ -236,14 +306,14 @@ export const useDebateRoom = (debateId?: string) => {
     }
   }, [inputValue, handleSubmit]);
 
-  const handleEndDebate = useCallback(() => {
-    if (confirm('상대방에게 토론 종료를 제안하시겠습니까?\n(현재 데모 버전에서는 상대방 수락 없이 즉시 투표로 넘어갑니다.)')) {
-      setIsDebateEnded(true);
-      if (role !== 'viewer') {
-        setShowSummaryModal(true);
+  const handleEndDebate = useCallback(async () => {
+    if (confirm('토론을 정말로 종료하시겠습니까?\n(종료 시 더 이상 발언할 수 없으며 즉시 투표로 넘어갑니다.)')) {
+      if (debateId) {
+        await debateRepository.endDebate(debateId);
+        await refreshDebateMeta();
       }
     }
-  }, [role]);
+  }, [role, debateId, refreshDebateMeta]);
 
   const handleScrollToTarget = useCallback((targetId: string | number) => {
     const el = document.getElementById(`turn-${targetId}`);
@@ -256,41 +326,6 @@ export const useDebateRoom = (debateId?: string) => {
     }
   }, []);
 
-  const handleVote = useCallback(async (stance: 'proposer' | 'responder', voteType: 'pre' | 'final') => {
-    if (!debateId || !currentUser?.id) {
-      alert('로그인이 필요합니다.');
-      return;
-    }
-    
-    // 최종 투표 시 확인 모달 띄우기 (기존 요구사항 유지)
-    if (voteType === 'final') {
-      const confirmMessage = '투표하시겠습니까?';
-      if (!confirm(confirmMessage)) {
-        return;
-      }
-    }
-
-    try {
-      await debateRepository.submitVote(debateId, currentUser.id, stance, voteType);
-      
-      if (voteType === 'pre') {
-        setHasPreVoted(true);
-        setShowPreVoteModal(false);
-      } else {
-        setHasFinalVoted(true);
-      }
-      
-      // 최신 stats 다시 로드
-      const newStats = await debateRepository.getVoteStats(debateId);
-      setVoteStats(newStats);
-
-      if (voteType === 'final') {
-        alert('최종 판결이 반영되었습니다! 설득 지표를 확인해보세요.');
-      }
-    } catch (e: any) {
-      alert(e.message || '투표 실패');
-    }
-  }, [debateId, currentUser, debateMeta]);
 
   const handleLikeTurn = (turnId: string) => {
     setLikedTurns(prev => ({
@@ -303,22 +338,23 @@ export const useDebateRoom = (debateId?: string) => {
     debateMeta,
     isLoading,
     role,
-    isDebateEnded, setIsDebateEnded,
+    isDebateEnded,
     hasPreVoted, setHasPreVoted,
-    hasFinalVoted, setHasFinalVoted,
     showPreVoteModal, setShowPreVoteModal,
-    showSummaryModal, setShowSummaryModal,
-    voteStats,
     isFullView,
     turns, setTurns,
     liveComments, setLiveComments,
     currentTurnOwner, setCurrentTurnOwner,
     inputValue, setInputValue,
+    refreshDebateMeta,
     replyTarget, setReplyTarget,
     chatBottomRef,
     selectionPopup, setSelectionPopup,
     chatPage, setChatPage,
     itemsPerPage, totalChatPages,
+    hasJudged,
+    judgmentsData: judgmentsInfo,
+    likedTurns,
     handleMouseUp,
     handlePartialQuote,
     handleSubmit,
@@ -326,8 +362,20 @@ export const useDebateRoom = (debateId?: string) => {
     handleKeyDown,
     handleEndDebate,
     handleScrollToTarget,
-    handleVote,
     handleLikeTurn,
-    likedTurns
+    refreshJudgments: async () => {
+      if (!debateId) return;
+      const res = await judgmentRepository.getJudgments(debateId);
+      setJudgmentsInfo(res);
+      if (currentUser?.id) {
+        setHasJudged(await judgmentRepository.hasUserJudged(debateId, currentUser.id));
+      }
+    },
+    endDebate: async () => {
+      if (debateId) {
+        await debateRepository.endDebate(debateId);
+        await refreshDebateMeta();
+      }
+    }
   };
 };

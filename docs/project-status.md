@@ -38,20 +38,22 @@ Akora 프로젝트는 다음 3개의 문서를 통해 기획과 상태를 분리
 - **ViewModel 구조**: `BoardComment`, `DraftDebate`, `SelectionPopup` 등 화면별 뷰 전용 데이터와 순수 도메인 객체 분리
 - **Mock 기반 UX Flow 연결 완료**: 게시판 ➔ 댓글 ➔ 토론 제안 ➔ 알림 ➔ 수락 ➔ 토론방 진입까지의 유저 여정(Core Journey) 통합
 
-- **Database Schema**: 5대 핵심 도메인의 관계형 데이터베이스 스키마 설계 (`docs/database-schema.md`)
-- **Repository Layer**: Supabase 전환을 대비한 의존성 분리형 데이터 액세스 계층(`repositories/`) 뼈대 및 Mock 구현체 세팅
+- **Database**: Supabase 프로젝트 연동 및 실제 DB 테이블 생성 완료
+- **Auth**: Supabase 통합 및 로그인/인증 시스템 구축 완료
+- **Repository Layer**: Supabase 기반의 의존성 분리형 데이터 액세스 계층(`repositories/supabase`) 전환 완료
+- **WebSocket (Realtime)**: 토론방 내 실시간 턴 업데이트 연동
+- **MVP Bug Fixes**: AI 주제 생성 실패 처리, 토론 종료 및 제안 거절 DB 동기화, In-memory 메모리 누수 해결 등 구조적 안정화
 
 ### 🟡 In Progress
 *이번 스프린트에서 집중하고 있는 단일 목표입니다.*
 
-- **Auth**: Supabase 통합 및 로그인/인증 시스템 구축 (DB 설계 완료로 곧바로 CRUD 연동 가능)
+- **MVP Launch Readiness**: 프로덕션 배포 전 잔여 버그 수정 및 최적화
+- **Feature Completion**: 랜덤 매칭 1:1 토론 기획 및 도입 준비
 
 ### 🔮 Future
 *앞으로 진행할 굵직한 주요 마일스톤입니다.*
 
-- **Database**: Supabase 프로젝트 연동 및 실제 DB 테이블 생성
-- **API Layer**: 프론트엔드 - Supabase 간 통신을 위한 Repository 실제 구현 (현재의 Mock 데이터 대체)
-- **WebSocket (Realtime)**: 실시간 양방향 통신 기반 채팅 및 즉각적 알림 연동
+- **1:1 토론 랜덤 매칭 기능**: 사용자가 즉석에서 토론을 매칭받는 기능 (MVP 이후 도입)
 - **Notification Persistence**: 알림 데이터 영속화 처리
 - **User Profile & 마이페이지**: 유저 프로필 시스템 및 개인 활동 내역 대시보드
 - **Search**: 게시물 및 토론 검색 기능

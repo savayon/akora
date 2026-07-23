@@ -1,36 +1,65 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useAppStore } from '@/store/useAppStore';
 
 export function PostActionButtons({ postId, initialLikes }: { postId: string; initialLikes: number }) {
   const [likes, setLikes] = useState(initialLikes);
   const [isLiked, setIsLiked] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { currentUser, setIsLoginModalOpen } = useAppStore();
+
+  useEffect(() => {
+    setLikes(initialLikes);
+  }, [initialLikes]);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (!currentUser.id) {
+      setIsLiked(false);
+      return;
+    }
+
+    const loadLikeStatus = async () => {
+      try {
+        const { postRepository } = await import('@/repositories');
+        const liked = await postRepository.getPostLikeStatus(postId, currentUser.id);
+        if (isMounted) setIsLiked(liked);
+      } catch (error) {
+        console.warn('Failed to load post like status:', error);
+      }
+    };
+
+    loadLikeStatus();
+    return () => { isMounted = false; };
+  }, [postId, currentUser.id]);
 
   const handleToggleLike = async () => {
     if (!currentUser.id) {
       setIsLoginModalOpen(true);
       return;
     }
+    if (isSubmitting) return;
 
-    if (isLiked) {
-      setLikes(prev => prev - 1);
-      setIsLiked(false);
-    } else {
-      setLikes(prev => prev + 1);
-      setIsLiked(true);
-    }
+    const previousLikes = likes;
+    const previousIsLiked = isLiked;
+    const nextIsLiked = !previousIsLiked;
+    setLikes((value) => value + (nextIsLiked ? 1 : -1));
+    setIsLiked(nextIsLiked);
+    setIsSubmitting(true);
 
     try {
       const { postRepository } = await import('@/repositories');
-      await postRepository.togglePostLike(postId, currentUser.id);
-    } catch (e) {
-      console.error(e);
+      const persistedIsLiked = await postRepository.togglePostLike(postId, currentUser.id);
+      setIsLiked(persistedIsLiked);
+    } catch (e: any) {
+      alert(e.message || '추천을 처리하지 못했습니다.');
       // rollback
-      setLikes(likes);
-      setIsLiked(isLiked);
+      setLikes(previousLikes);
+      setIsLiked(previousIsLiked);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -47,6 +76,7 @@ export function PostActionButtons({ postId, initialLikes }: { postId: string; in
     <div className="p-6 border-t border-slate-50 bg-slate-50 flex flex-col sm:flex-row justify-center items-center gap-3">
       <button 
         onClick={handleToggleLike}
+        disabled={isSubmitting}
         className={`flex items-center gap-2 px-6 py-2.5 rounded-full bg-white border font-bold transition-colors shadow-sm cursor-pointer ${isLiked ? 'text-red-600 border-red-200 bg-red-50' : 'text-slate-700 border-slate-200 hover:bg-slate-100 hover:text-red-600'}`}
       >
         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905 0 .714-.211 1.412-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.514" /></svg>

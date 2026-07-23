@@ -1,6 +1,7 @@
 import { createClient } from '@/utils/supabase/client';
 import type { IUserRepository } from '../interfaces';
 import type { UserProfileStats } from '@/types';
+import { SupabaseDebateRepository } from './DebateRepository';
 
 // 단기 캐싱을 위한 Map (1분)
 const profileCache = new Map<string, { data: UserProfileStats, timestamp: number }>();
@@ -13,7 +14,7 @@ export const SupabaseUserRepository: IUserRepository = {
 
     const { data: profile } = await supabase
       .from('users')
-      .select('id, nickname, role, is_public_profile')
+      .select('id, nickname, role')
       .eq('id', user.id)
       .single();
 
@@ -29,11 +30,11 @@ export const SupabaseUserRepository: IUserRepository = {
       id: profile.id,
       name: profile.nickname || '사용자',
       role: profile.role || 'user',
-      isPublicProfile: profile.is_public_profile !== false
+      isPublicProfile: true // 임시: DB 컬럼 누락 방지
     };
   },
 
-  async getProfileStats(uuid: string) {
+  async getProfileStats(uuid: string, client?: any) {
     // 1분 메모리 캐싱 (단기 캐싱)
     const now = Date.now();
     const cached = profileCache.get(uuid);
@@ -41,12 +42,12 @@ export const SupabaseUserRepository: IUserRepository = {
       return cached.data;
     }
 
-    const supabase = createClient();
+    const supabase = client || createClient();
     
     // 1. 유저 기본 정보 조회
     const { data: user, error: userError } = await supabase
       .from('users')
-      .select('nickname, avatar_url, role, is_public_profile, created_at, persuasion_count')
+      .select('nickname, avatar_url, role, created_at')
       .eq('id', uuid)
       .single();
 
@@ -55,7 +56,7 @@ export const SupabaseUserRepository: IUserRepository = {
       return null;
     }
 
-    const isPublic = user.is_public_profile !== false;
+    const isPublic = true; // 임시: DB 컬럼 누락 방어
     let postCount = 0;
     let commentCount = 0;
 
@@ -130,7 +131,7 @@ export const SupabaseUserRepository: IUserRepository = {
 
     if (error) {
       console.error(error);
-      throw new Error('프로필 업데이트 중 오류가 발생했습니다.');
+      throw new Error(error.message || '프로필 업데이트 중 오류가 발생했습니다.');
     }
 
     profileCache.delete(uuid);
@@ -224,32 +225,42 @@ export const SupabaseUserRepository: IUserRepository = {
     // Fetch user's debates
     const { data: debatesData } = await supabase
       .from('debates')
-      .select('id, topic, status, created_at, proposer_id, responder_id')
+      .select('id, topic, topic_status, status, ended_reason, created_at, proposer_id, responder_id')
       .or(`proposer_id.eq.${uuid},responder_id.eq.${uuid}`)
       .order('created_at', { ascending: false });
 
-    const myDebates = (debatesData || []).map((d: any) => ({
-      id: `debate-${d.id}`,
-      title: d.topic,
-      boardName: d.status === 'in_progress' ? '진행중인 토론' : d.status === 'voting' ? '투표중인 토론' : '종료된 토론',
-      date: formatRelativeTime(d.created_at),
-      link: `/debate/live/${d.id}`
-    }));
+    const myDebates = (debatesData || []).map((d: any) => {
+      const isCancelled = d.ended_reason === 'forfeit' || d.ended_reason === 'abandoned';
+
+      return {
+        id: `debate-${d.id}`,
+        title: SupabaseDebateRepository.getDisplayTopic(d),
+        boardName: isCancelled ? '취소된 토론' : d.status === 'in_progress' ? '진행중인 토론' : d.status === 'judging' ? '판정중인 토론' : '종료된 토론',
+        date: formatRelativeTime(d.created_at),
+        link: `/debate/live/${d.id}`,
+        isDisabled: isCancelled,
+      };
+    });
 
     // Fetch watched debates
     const { data: watchedData } = await supabase
       .from('debate_followers')
-      .select('debate_id, created_at, debates!inner(id, topic, status)')
+      .select('debate_id, created_at, debates!inner(id, topic, topic_status, status, ended_reason)')
       .eq('user_id', uuid)
       .order('created_at', { ascending: false });
       
-    const myWatchedDebates = (watchedData || []).map((w: any) => ({
-      id: `watched-debate-${w.debate_id}`,
-      title: w.debates?.topic || '알 수 없는 토론',
-      boardName: w.debates?.status === 'in_progress' ? '진행중인 토론 (관전)' : w.debates?.status === 'voting' ? '투표중인 토론 (관전)' : '종료된 토론 (관전)',
-      date: formatRelativeTime(w.created_at),
-      link: `/debate/live/${w.debate_id}`
-    }));
+    const myWatchedDebates = (watchedData || []).map((w: any) => {
+      const isCancelled = w.debates?.ended_reason === 'forfeit' || w.debates?.ended_reason === 'abandoned';
+
+      return {
+        id: `watched-debate-${w.debate_id}`,
+        title: w.debates ? SupabaseDebateRepository.getDisplayTopic(w.debates) : '알 수 없는 토론',
+        boardName: isCancelled ? '취소된 토론 (관전)' : w.debates?.status === 'in_progress' ? '진행중인 토론 (관전)' : w.debates?.status === 'judging' ? '판정중인 토론 (관전)' : '종료된 토론 (관전)',
+        date: formatRelativeTime(w.created_at),
+        link: `/debate/live/${w.debate_id}`,
+        isDisabled: isCancelled,
+      };
+    });
 
     return { myPosts, myComments, myDebates, myWatchedDebates };
   },

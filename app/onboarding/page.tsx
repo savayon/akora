@@ -30,6 +30,12 @@ export default function OnboardingPage() {
       setError('닉네임은 20자 이내로 입력해주세요.');
       return;
     }
+    
+    // 특수문자 및 띄어쓰기 방지 정규식 (한글, 영문, 숫자만 허용)
+    if (!/^[a-zA-Z0-9가-힣]+$/.test(nickname.trim())) {
+      setError('닉네임에는 띄어쓰기나 특수문자를 사용할 수 없습니다.');
+      return;
+    }
 
     setIsLoading(true);
     setError('');

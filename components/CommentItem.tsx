@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import Link from 'next/link';
 import { UserBadge } from '@/components/UserBadge';
 import { ThumbUpIcon, ReplyIcon } from '@/components/icons';
@@ -46,6 +46,8 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   const [replyText, setReplyText] = useState('');
   const [isProposalMode, setIsProposalMode] = useState(false);
   const [proposalClaimText, setProposalClaimText] = useState('');
+  const [isTogglingWatch, setIsTogglingWatch] = useState(false);
+  const watchRequestId = useRef(0);
   
   const { currentUser, openReportModal, setIsLoginModalOpen } = useAppStore();
   
@@ -53,12 +55,22 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   React.useEffect(() => {
     const proposalId = boardComment?.proposalId;
     if (isProposal && currentUser?.id && proposalId) {
+      const requestId = ++watchRequestId.current;
+      let isCurrent = true;
+
       import('@/repositories').then(({ proposalRepository }) => {
         proposalRepository.getWatchStatus(proposalId, currentUser.id).then(({ isWatched, watchCount }) => {
+          if (!isCurrent || requestId !== watchRequestId.current) return;
           setIsWatched(isWatched);
           setWatchCount(watchCount);
-        }).catch(console.error);
+        }).catch((error) => {
+          console.warn('보고싶어요 상태를 불러오지 못했습니다.', error instanceof Error ? error.message : error);
+        });
       });
+
+      return () => {
+        isCurrent = false;
+      };
     }
   }, [isProposal, currentUser?.id, boardComment?.proposalId]);
 
@@ -85,8 +97,8 @@ export const CommentItem: React.FC<CommentItemProps> = ({
       } else {
         await commentRepository.toggleLike(String(comment.id), currentUser.id);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      alert(e.message || '추천을 처리하지 못했습니다.');
       // 롤백
       setLocalLikes(localLikes);
       setIsLiked(isLiked);
@@ -94,13 +106,20 @@ export const CommentItem: React.FC<CommentItemProps> = ({
   };
 
   const handleToggleWatch = async () => {
+    const proposalId = boardComment?.proposalId;
     if (!currentUser.id) {
       setIsLoginModalOpen(true);
       return;
     }
+    if (!proposalId || isTogglingWatch) return;
+
+    const requestId = ++watchRequestId.current;
+    const previousIsWatched = isWatched;
+    const previousWatchCount = watchCount;
+    setIsTogglingWatch(true);
     
     // UI 낙관적 업데이트
-    if (isWatched) {
+    if (previousIsWatched) {
       setWatchCount(prev => Math.max(0, prev - 1));
       setIsWatched(false);
     } else {
@@ -111,15 +130,23 @@ export const CommentItem: React.FC<CommentItemProps> = ({
     try {
       if (boardComment?.proposalId) {
         const { proposalRepository } = await import('@/repositories');
-        const result = await proposalRepository.toggleWatchProposal(boardComment.proposalId, currentUser.id);
-        setIsWatched(result.isWatched);
-        setWatchCount(result.watchCount);
+        const result = await proposalRepository.toggleWatchProposal(proposalId, currentUser.id);
+        if (requestId === watchRequestId.current) {
+          setIsWatched(result.isWatched);
+          setWatchCount(result.watchCount);
+        }
       }
-    } catch (e) {
-      console.error(e);
+    } catch (e: any) {
+      alert(e.message || '보고싶어요를 처리하지 못했습니다.');
       // 롤백
-      setIsWatched(!isWatched);
-      setWatchCount(isWatched ? watchCount + 1 : watchCount - 1);
+      if (requestId === watchRequestId.current) {
+        setIsWatched(previousIsWatched);
+        setWatchCount(previousWatchCount);
+      }
+    } finally {
+      if (requestId === watchRequestId.current) {
+        setIsTogglingWatch(false);
+      }
     }
   };
 
@@ -365,7 +392,8 @@ export const CommentItem: React.FC<CommentItemProps> = ({
               ) : (
                 <button 
                   onClick={handleToggleWatch}
-                  className={`ml-auto px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1 cursor-pointer ${isWatched ? 'bg-yellow-400 text-slate-900' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
+                  disabled={isTogglingWatch}
+                  className={`ml-auto px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1 cursor-pointer disabled:cursor-wait disabled:opacity-60 ${isWatched ? 'bg-yellow-400 text-slate-900' : 'bg-yellow-100 hover:bg-yellow-200 text-yellow-800'}`}
                 >
                   🙋 보고싶어요! {watchCount > 0 && <span className="font-black">{watchCount}</span>}
                 </button>

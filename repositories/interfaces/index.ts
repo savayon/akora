@@ -1,7 +1,8 @@
 import { 
   Comment, BoardComment, Proposal, Debate, Turn, Notification, 
   Post, PostListItem, Report, ReportStatus, 
-  DiscussionTopic, DiscussionComment 
+  DiscussionTopic, DiscussionComment,
+  Judgment, JurorType
 } from '@/types';
 
 // ============================================================
@@ -27,6 +28,7 @@ export interface IPostRepository {
   deletePost(id: string, supabaseClient?: any): Promise<void>;
   softDeletePost(id: string, reason: string, supabaseClient?: any): Promise<void>;
   incrementViews(id: string, supabaseClient?: any): Promise<void>;
+  getPostLikeStatus(postId: string, userId: string): Promise<boolean>;
   togglePostLike(postId: string, userId: string): Promise<boolean>;
 }
 
@@ -77,18 +79,40 @@ export interface IProposalRepository {
 // Debate (토론)
 // ============================================================
 export interface IDebateRepository {
-  getDebate(debateId: string): Promise<Debate | null>;
-  getActiveDebates(): Promise<Debate[]>;
+  getDebate(debateId: string, supabaseClient?: any): Promise<Debate | null>;
+  getActiveDebates(supabaseClient?: any): Promise<Debate[]>;
   getRecentDebates(limit: number, supabaseClient?: any): Promise<Debate[]>;
-  createDebate(data: Partial<Debate>): Promise<Debate>;
-  updateStatus(debateId: string, status: string): Promise<void>;
-  submitVote(debateId: string, userId: string, stance: 'proposer' | 'responder', voteType: 'pre' | 'final'): Promise<void>;
-  getVoteStats(debateId: string): Promise<{ proposer: number; responder: number; proposerPersuaded: number; responderPersuaded: number }>;
-  getUserVote(debateId: string, userId: string, voteType: 'pre' | 'final'): Promise<'proposer' | 'responder' | null>;
-  getDebateByProposalId(proposalId: string | number): Promise<Debate | null>;
-  markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder'): Promise<boolean>;
-  submitClaim(debateId: string, role: 'proposer' | 'responder', claim: string): Promise<void>;
-  markAsForfeitLoss(debateId: string, role: 'proposer' | 'responder' | 'both'): Promise<boolean>;
+  createDebate(data: Partial<Debate>, supabaseClient?: any): Promise<Debate>;
+  updateStatus(debateId: string, status: string, supabaseClient?: any): Promise<void>;
+  endDebate(debateId: string, supabaseClient?: any): Promise<boolean>;
+  getDebateByProposalId(proposalId: string | number, supabaseClient?: any): Promise<Debate | null>;
+  markAsTimeoutLoss(debateId: string, loserRole: 'proposer' | 'responder', supabaseClient?: any): Promise<boolean>;
+  submitClaim(debateId: string, role: 'proposer' | 'responder', claim: string, supabaseClient?: any): Promise<void>;
+  generateDebateTopic(debateId: string, proposerClaim: string, responderClaim: string, supabaseClient?: any): Promise<{ topic: string } | null>;
+  updateDebateTopic(debateId: string, topic: string, supabaseClient?: any): Promise<void>;
+  requestTopicChange(debateId: string, topic: string, supabaseClient?: any): Promise<{ recipientId: string }>;
+  approveTopicChange(debateId: string, supabaseClient?: any): Promise<void>;
+  rejectTopicChange(debateId: string, supabaseClient?: any): Promise<void>;
+  getDisplayTopic(debate: Pick<Debate, 'topic' | 'topicStatus'>): string;
+  markAsForfeitLoss(debateId: string, role: 'proposer' | 'responder' | 'both', supabaseClient?: any): Promise<boolean>;
+  getDebateStatsData(userId: string, supabaseClient?: any): Promise<DebateStatsRawData>;
+  closeDebateWithResult(debateId: string, winnerId: string, supabaseClient?: any): Promise<boolean>;
+  getDebateNotificationRecipients(debateId: string, supabaseClient?: any): Promise<string[]>;
+}
+
+export interface DebateStatsRawData {
+  debates: Array<{
+    id: string;
+    proposer_id: string;
+    responder_id: string;
+    status: string;
+    ended_reason: 'timeout' | 'normal' | 'abandoned' | 'forfeit' | null;
+    timeout_loser_role: 'proposer' | 'responder' | 'both' | null;
+  }>;
+  finalVotes: Array<{
+    debate_id: string;
+    stance: 'proposer' | 'responder';
+  }>;
 }
 
 // ============================================================
@@ -108,6 +132,38 @@ export interface INotificationRepository {
   markAllAsRead(userId: string): Promise<void>;
   createNotification(userId: string, data: Omit<Notification, 'id' | 'isRead' | 'createdAt'>): Promise<Notification>;
   deleteNotification(notificationId: string): Promise<void>;
+}
+
+// ============================================================
+// PreVote (사전투표)
+// ============================================================
+export interface IPreVoteRepository {
+  submitPreVote(debateId: string, userId: string, stance: 'proposer' | 'responder', supabaseClient?: any): Promise<void>;
+  getUserPreVote(debateId: string, userId: string, supabaseClient?: any): Promise<'proposer' | 'responder' | null>;
+  getPreVoteStats(debateId: string, supabaseClient?: any): Promise<{ proposer: number; responder: number; total: number }>;
+  getAllPreVotesMap(debateId: string, supabaseClient?: any): Promise<Map<string, 'proposer' | 'responder'>>;
+}
+
+// ============================================================
+// Judgment (배심원 판정)
+// ============================================================
+export interface IJudgmentRepository {
+  submitJudgment(
+    debateId: string, 
+    jurorId: string | null, 
+    jurorType: JurorType, 
+    votedForId: string, 
+    reason: string,
+    supabaseClient?: any
+  ): Promise<boolean>;
+
+  getJudgments(debateId: string, supabaseClient?: any): Promise<{
+    judgments: Judgment[];
+    currentCount: number;
+    requiredCount: number;
+  }>;
+  
+  hasUserJudged(debateId: string, userId: string, supabaseClient?: any): Promise<boolean>;
 }
 
 // ============================================================

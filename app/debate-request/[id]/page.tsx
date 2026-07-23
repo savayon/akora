@@ -5,7 +5,8 @@ import { useRouter } from 'next/navigation';
 import { useState, useEffect, use } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { useCountdown } from '@/hooks/useCountdown';
-import { proposalRepository, debateRepository, notificationRepository } from '@/repositories';
+import { proposalRepository, debateRepository } from '@/repositories';
+import { NotificationService } from '@/services';
 import type { Proposal } from '@/types';
 
 // Mock Data
@@ -29,6 +30,7 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(false);
+  const { setGeneratedDebateTopic } = useAppStore();
 
   useEffect(() => {
     const fetchProposal = async () => {
@@ -90,13 +92,25 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
         status: 'in_progress',
       });
 
+      void debateRepository.generateDebateTopic(
+        String(createdDebate.id),
+        proposal.claim,
+        responderClaim.trim(),
+      ).then((result) => {
+        if (result?.topic) {
+          setGeneratedDebateTopic(String(createdDebate.id), result.topic);
+        }
+      }).catch((error) => {
+        console.warn('토론 주제를 생성하지 못했습니다.', error instanceof Error ? error.message : error);
+      });
+
       // 3. 알림 생성 (상대방에게 수락되었음을 알림)
       if (proposal.proposerId) {
-        await notificationRepository.createNotification(proposal.proposerId, {
+        await NotificationService.createNotification([proposal.proposerId], {
           type: 'debate_ended', // (임시) 알림 아이콘/타입 재사용
           icon: '🤝',
           message: `${proposal.targetName}님이 토론 제안을 수락했습니다!`,
-          subtext: `주제: "${proposal.topic}"`,
+          subtext: 'AI 토론 주제를 생성 중입니다.',
           link: `/debate/live/${createdDebate.id}`
         });
       }
@@ -108,11 +122,11 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
         for (const watcherId of watcherIds) {
           // 본인이 아니라면 알림
           if (watcherId !== proposal.proposerId && watcherId !== proposal.targetId) {
-            await notificationRepository.createNotification(watcherId, {
+            await NotificationService.createNotification([watcherId], {
               type: 'proposal_received',
               icon: '👀',
               message: `보고싶어했던 토론이 성사되었습니다!`,
-              subtext: `주제: "${proposal.topic}"`,
+              subtext: 'AI 토론 주제를 생성 중입니다.',
               link: `/debate/live/${createdDebate.id}`
             });
           }
@@ -263,9 +277,16 @@ export default function DebateRequestPage({ params }: { params: Promise<{ id: st
                       취소
                     </button>
                     <button 
-                      onClick={() => {
+                      onClick={async () => {
                         if (window.confirm('정말 이 토론 제안을 거절하시겠습니까?')) {
-                          router.push('/');
+                          try {
+                            await proposalRepository.updateStatus(String(proposal.id), 'rejected');
+                            alert('토론 제안을 거절했습니다.');
+                            router.push('/');
+                          } catch (err) {
+                            console.error(err);
+                            alert('요청을 처리하는 중 오류가 발생했습니다.');
+                          }
                         }
                       }}
                       className="flex-1 py-3 bg-red-500 hover:bg-red-600 text-white font-bold rounded-lg text-sm transition-colors"
