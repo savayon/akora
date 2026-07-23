@@ -43,10 +43,10 @@ export class MatchService {
         }
 
         // 2-3. 두 유저의 큐 상태를 matched로 업데이트하고 Debate ID 기록
-        await matchRepo.updateMatchStatus(userId, 'matched', newDebate.id, supabaseClient);
-        await matchRepo.updateMatchStatus(opponentId, 'matched', newDebate.id, supabaseClient);
+        await matchRepo.updateMatchStatus(userId, 'matched', String(newDebate.id), supabaseClient);
+        await matchRepo.updateMatchStatus(opponentId, 'matched', String(newDebate.id), supabaseClient);
 
-        return { status: 'matched', debateId: newDebate.id };
+        return { status: 'matched', debateId: String(newDebate.id) };
       } else {
         // 상대를 찾지 못함 (대기 중)
         return { status: 'waiting' };
