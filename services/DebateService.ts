@@ -78,16 +78,32 @@ export class DebateService {
   }
 
   /**
+   * 리스트뷰용 가벼운 요약 (불필요한 설득왕/판정 통계를 생략하고 쿼리를 최적화합니다.)
+   */
+  static async getLightweightDebateSummary(debate: Debate, supabaseClient?: any): Promise<DebateSummaryDto> {
+    const preVoteStats = await preVoteRepository.getPreVoteStats(debate.id.toString(), supabaseClient);
+    
+    return {
+      debate,
+      isHot: HotScorePolicy.isHot(preVoteStats.total),
+      isTense: HotScorePolicy.isTense(preVoteStats.proposer, preVoteStats.responder),
+      persuasionCount: { proposer: 0, responder: 0 },
+      isProposerPersuasionKing: false,
+      isResponderPersuasionKing: false,
+      judgmentProgress: { proposer: 0, responder: 0, total: 0, required: 0 }
+    };
+  }
+
+  /**
    * 활성화된 토론 목록을 요약 형태로 가져옵니다. (리스트뷰용)
    * 현재 MVP 구조상 N+1 쿼리가 발생하므로, 추후 최적화 대상입니다.
    */
   static async getActiveDebateSummaries(supabaseClient?: any): Promise<DebateSummaryDto[]> {
     const debates = await debateRepository.getActiveDebates(supabaseClient);
-    const summaries: DebateSummaryDto[] = [];
-    for (const debate of debates) {
-      const summary = await this.getDebateSummary(debate.id.toString(), supabaseClient);
-      if (summary) summaries.push(summary);
-    }
+    // 10개 미만의 가벼운 통계 조회이므로 Promise.all로 병렬 처리해도 무방합니다.
+    const summaries = await Promise.all(
+      debates.map(debate => this.getLightweightDebateSummary(debate, supabaseClient))
+    );
     return summaries;
   }
 
@@ -96,11 +112,9 @@ export class DebateService {
    */
   static async getRecentDebateSummaries(limit: number, supabaseClient?: any): Promise<DebateSummaryDto[]> {
     const debates = await debateRepository.getRecentDebates(limit, supabaseClient);
-    const summaries: DebateSummaryDto[] = [];
-    for (const debate of debates) {
-      const summary = await this.getDebateSummary(debate.id.toString(), supabaseClient);
-      if (summary) summaries.push(summary);
-    }
+    const summaries = await Promise.all(
+      debates.map(debate => this.getLightweightDebateSummary(debate, supabaseClient))
+    );
     return summaries;
   }
 }
