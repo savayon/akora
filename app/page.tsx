@@ -1,11 +1,16 @@
-import { createClient } from '@/utils/supabase/server';
+import { createClient as createSupabaseClient } from '@supabase/supabase-js';
 import { HomeClient } from './HomeClient';
 import { discussionRepository, postRepository } from '@/repositories';
 import { DebateService } from '@/services/DebateService';
 
+export const revalidate = 60; // 60초마다 재생성 (ISR 적용)
+
 export default async function Home() {
   try {
-    const supabase = await createClient();
+    const supabase = createSupabaseClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder_key'
+    );
     
     // 최근 진행중인 토론 10개 (Summary DTO)
     const debates = await DebateService.getRecentDebateSummaries(10, supabase);
