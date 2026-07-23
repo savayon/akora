@@ -61,13 +61,21 @@ export class SupabaseMatchRepository {
   }
 
   // 2. 하트비트 갱신
-  async updateHeartbeat(userId: string, client?: SupabaseClient): Promise<void> {
+  async updateHeartbeat(userId: string, client?: SupabaseClient): Promise<MatchingQueue | null> {
     const supabaseClient = this.getClient(client);
-    await supabaseClient
+    const { data, error } = await supabaseClient
       .from('matching_queue')
       .update({ last_seen_at: new Date().toISOString() })
       .eq('user_id', userId)
-      .in('status', ['waiting', 'matching']);
+      .in('status', ['waiting', 'matching', 'matched']) // matched 상태일 때도 debate id를 가져오기 위해 포함
+      .select()
+      .maybeSingle();
+      
+    if (error) {
+      console.error('updateHeartbeat error:', error);
+      return null;
+    }
+    return data;
   }
 
   // 3. 큐 취소

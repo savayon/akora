@@ -19,8 +19,8 @@ export async function POST(request: Request) {
     } 
     
     if (action === 'heartbeat') {
-      await matchService.pulseHeartbeat(user.id, supabase);
-      return NextResponse.json({ status: 'ok' });
+      const queueStatus = await matchService.pulseHeartbeat(user.id, supabase);
+      return NextResponse.json({ status: 'ok', queueStatus });
     }
 
     if (action === 'cancel') {

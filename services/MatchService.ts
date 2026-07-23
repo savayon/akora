@@ -26,21 +26,15 @@ export class MatchService {
         
         // 2-2. 토론방(Debate) 생성
         // 의존성 규칙에 따라 Debate 생성을 DebateRepository에 위임하는 것이 좋습니다.
-        // 현재는 직접 insert 하고 있으나, 가급적이면 서버 환경의 supabaseClient를 사용해야 합니다.
-        const { data: newDebate, error } = await supabaseClient
-          .from('debates')
-          .insert({
-            proposer_id: userId,          // 요청한 사람을 Proposer로
-            responder_id: opponentId,     // 매칭된 상대를 Responder로
+        let newDebate;
+        try {
+          newDebate = await debateRepository.createDebate({
+            proposerId: userId,
+            responderId: opponentId,
             status: 'preparing',
             topic: topicTitle,
-            current_turn: 1,
-            // 기타 필수 필드 디폴트값 (테이블 정의에 따라 다름)
-          })
-          .select('id')
-          .single();
-
-        if (error || !newDebate) {
+          }, supabaseClient);
+        } catch (error) {
           console.error('Failed to create debate after match:', error);
           // 롤백: 토론방 생성 실패 시 둘 다 다시 failed 처리
           await matchRepo.updateMatchStatus(userId, 'failed', undefined, supabaseClient);
@@ -68,7 +62,7 @@ export class MatchService {
    * 브라우저 종료 방어를 위한 하트비트 갱신
    */
   async pulseHeartbeat(userId: string, supabaseClient?: any) {
-    await matchRepo.updateHeartbeat(userId, supabaseClient);
+    return await matchRepo.updateHeartbeat(userId, supabaseClient);
   }
 
   /**

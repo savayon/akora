@@ -84,18 +84,32 @@ export function MatchingModal({ isOpen, onClose, userId }: Props) {
         })
         .subscribe();
 
-      // 하트비트 시작 (15초 간격)
+      // 하트비트 및 폴링 (3초 간격)
       heartbeatInterval.current = setInterval(async () => {
         try {
-          await fetch('/api/match', {
+          const res = await fetch('/api/match', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ action: 'heartbeat' })
           });
+          const data = await res.json();
+          
+          if (data.queueStatus) {
+            const newStatus = data.queueStatus.status;
+            if (newStatus === 'matched' && data.queueStatus.matched_debate_id) {
+              setStatus('matched');
+              setDebateId(data.queueStatus.matched_debate_id);
+              setTimeout(() => {
+                router.push(`/debate/live/${data.queueStatus.matched_debate_id}`);
+              }, 1500);
+            } else if (newStatus === 'failed' || newStatus === 'canceled' || newStatus === 'timeout') {
+              setStatus('failed');
+            }
+          }
         } catch (e) {
           console.error('Heartbeat failed', e);
         }
-      }, 15000);
+      }, 3000);
     };
 
     startMatching();
